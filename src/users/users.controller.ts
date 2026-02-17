@@ -67,6 +67,19 @@ export class UsersController {
     return this.usersService.findOne(req.user.id);
   }
 
+  @Get('profile/share')
+  @UseGuards(AuthGuard('jwt'))
+  async getProfileShareData(@Req() req) {
+    return this.usersService.getProfileShareData(req.user.id);
+  }
+
+  @Get('profile/qrcode')
+  @UseGuards(AuthGuard('jwt'))
+  async getProfileQRCode(@Req() req) {
+    const qrCode = await this.usersService.generateProfileQRCode(req.user.id);
+    return { qrCode };
+  }
+
   @Post()
   create(@Body() createUserDto: any) {
     return this.usersService.create(createUserDto);

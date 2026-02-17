@@ -7,6 +7,9 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { FollowsModule } from './follows/follows.module';
 import { BroadcastsModule } from './broadcasts/broadcasts.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { AppearanceModule } from './appearance/appearance.module';
+import { ChannelsModule } from './channels/channels.module';
 
 @Module({
   imports: [
@@ -24,6 +27,9 @@ import { BroadcastsModule } from './broadcasts/broadcasts.module';
     AuthModule,
     FollowsModule,
     BroadcastsModule,
+    NotificationsModule,
+    AppearanceModule,
+    ChannelsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

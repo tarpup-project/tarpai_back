@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User } from './user.schema';
 import { CloudinaryService } from './cloudinary.service';
+import * as QRCode from 'qrcode';
 
 @Injectable()
 export class UsersService {
@@ -61,6 +62,76 @@ export class UsersService {
       followersCount: user.followers?.length || 0,
       followingCount: user.following?.length || 0,
       createdAt: user.createdAt,
+    };
+  }
+
+  async generateProfileQRCode(userId: string): Promise<string> {
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Generate profile URL - adjust this to match your frontend URL structure
+    const profileUrl = `${process.env.FRONTEND_URL || 'https://tarpai.app'}/profile/${user.username || user._id}`;
+    
+    // Generate QR code as buffer
+    const qrCodeBuffer = await QRCode.toBuffer(profileUrl, {
+      width: 300,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF',
+      },
+    });
+
+    // Upload to Cloudinary
+    const qrCodeUrl = await this.uploadQRCodeToCloudinary(qrCodeBuffer, userId);
+
+    return qrCodeUrl;
+  }
+
+  private async uploadQRCodeToCloudinary(buffer: Buffer, userId: string): Promise<string> {
+    const cloudinary = require('cloudinary').v2;
+    
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        { 
+          folder: 'tarpai/qrcodes',
+          public_id: `qr_${userId}`,
+          overwrite: true,
+        },
+        (error, result) => {
+          if (error) {
+            console.error('Cloudinary QR upload error:', error);
+            return reject(error);
+          }
+          resolve(result.secure_url);
+        }
+      );
+      
+      uploadStream.end(buffer);
+    });
+  }
+
+  async getProfileShareData(userId: string) {
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const profileUrl = `${process.env.FRONTEND_URL || 'https://tarpai.app'}/profile/${user.username || user._id}`;
+    const qrCode = await this.generateProfileQRCode(userId);
+
+    return {
+      profileUrl,
+      qrCode,
+      user: {
+        id: user._id,
+        name: user.name,
+        username: user.username,
+        displayName: user.displayName,
+        avatar: user.avatar,
+      },
     };
   }
 

@@ -3,12 +3,14 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Broadcast } from './broadcast.schema';
 import { User } from '../users/user.schema';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class BroadcastsService {
   constructor(
     @InjectModel(Broadcast.name) private broadcastModel: Model<Broadcast>,
     @InjectModel(User.name) private userModel: Model<User>,
+    private notificationsService: NotificationsService,
   ) {}
 
   async sendBroadcast(userId: string, message: string) {
@@ -34,6 +36,14 @@ export class BroadcastsService {
     });
 
     await broadcast.save();
+
+    // Create notifications for all followers
+    const recipientIds = user.followers.map(id => id.toString());
+    await this.notificationsService.createBroadcastNotification(
+      userId,
+      recipientIds,
+      message.trim(),
+    );
 
     return {
       message: 'Broadcast sent successfully',
@@ -78,6 +88,13 @@ export class BroadcastsService {
     });
 
     await broadcast.save();
+
+    // Create notifications for selected followers
+    await this.notificationsService.createBroadcastNotification(
+      userId,
+      validRecipients,
+      message.trim(),
+    );
 
     return {
       message: 'Broadcast sent successfully',
