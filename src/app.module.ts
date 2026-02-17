@@ -10,6 +10,7 @@ import { BroadcastsModule } from './broadcasts/broadcasts.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AppearanceModule } from './appearance/appearance.module';
 import { ChannelsModule } from './channels/channels.module';
+import { StatusModule } from './status/status.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { ChannelsModule } from './channels/channels.module';
     NotificationsModule,
     AppearanceModule,
     ChannelsModule,
+    StatusModule,
   ],
   controllers: [AppController],
   providers: [AppService],
