@@ -1,7 +1,8 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { User } from './user.schema';
+import { Link } from './link.schema';
 import { CloudinaryService } from './cloudinary.service';
 import * as QRCode from 'qrcode';
 
@@ -9,6 +10,7 @@ import * as QRCode from 'qrcode';
 export class UsersService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
+    @InjectModel(Link.name) private linkModel: Model<Link>,
     private cloudinaryService: CloudinaryService,
   ) {}
 
@@ -227,5 +229,78 @@ export class UsersService {
 
   async remove(id: string): Promise<User> {
     return this.userModel.findByIdAndDelete(id).exec();
+  }
+
+  // Links Management
+  async getUserLinks(userId: string) {
+    const links = await this.linkModel
+      .find({ userId: new Types.ObjectId(userId), isActive: true })
+      .sort({ order: 1, createdAt: 1 })
+      .exec();
+
+    return { links };
+  }
+
+  async addLink(userId: string, title: string, url: string) {
+    // Get the count of existing links to set order
+    const count = await this.linkModel.countDocuments({ userId: new Types.ObjectId(userId) });
+
+    const link = new this.linkModel({
+      userId: new Types.ObjectId(userId),
+      title,
+      url,
+      order: count,
+      isActive: true,
+    });
+
+    await link.save();
+
+    return {
+      message: 'Link added successfully',
+      link,
+    };
+  }
+
+  async updateLink(
+    userId: string,
+    linkId: string,
+    data: { title?: string; url?: string; order?: number },
+  ) {
+    const link = await this.linkModel.findById(linkId);
+
+    if (!link) {
+      throw new NotFoundException('Link not found');
+    }
+
+    if (link.userId.toString() !== userId) {
+      throw new ForbiddenException('You can only update your own links');
+    }
+
+    if (data.title !== undefined) link.title = data.title;
+    if (data.url !== undefined) link.url = data.url;
+    if (data.order !== undefined) link.order = data.order;
+
+    await link.save();
+
+    return {
+      message: 'Link updated successfully',
+      link,
+    };
+  }
+
+  async deleteLink(userId: string, linkId: string) {
+    const link = await this.linkModel.findById(linkId);
+
+    if (!link) {
+      throw new NotFoundException('Link not found');
+    }
+
+    if (link.userId.toString() !== userId) {
+      throw new ForbiddenException('You can only delete your own links');
+    }
+
+    await this.linkModel.findByIdAndDelete(linkId);
+
+    return { message: 'Link deleted successfully' };
   }
 }

@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, Headers, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, Headers, UnauthorizedException, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AppearanceService } from './appearance.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JwtService } from '@nestjs/jwt';
@@ -21,9 +22,7 @@ export class AppearanceController {
         const token = auth.substring(7);
         const decoded = this.jwtService.verify(token);
         userId = decoded.id; // JWT uses 'id' not 'userId'
-        console.log('Decoded userId from token:', userId);
       } catch (error) {
-        console.log('Token verification failed:', error.message);
         // Invalid token, just return admin backgrounds
         userId = undefined;
       }
@@ -58,6 +57,17 @@ export class AppearanceController {
       body.name,
       body.thumbnail
     );
+  }
+
+  // Upload background image (requires auth)
+  @UseGuards(JwtAuthGuard)
+  @Post('backgrounds/upload')
+  @UseInterceptors(FileInterceptor('background'))
+  async uploadBackground(
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req,
+  ) {
+    return this.appearanceService.uploadUserBackground(req.user.id, file);
   }
 
   // Update background (requires auth for user backgrounds, adminKey for admin backgrounds)
@@ -104,5 +114,14 @@ export class AppearanceController {
     }
 
     return this.appearanceService.deleteBackground(id, userId, body.adminKey);
+  }
+
+  // Delete all backgrounds (requires adminKey)
+  @Delete('backgrounds')
+  async deleteAllBackgrounds(@Body() body: { adminKey: string }) {
+    if (!body.adminKey) {
+      throw new UnauthorizedException('Admin key is required');
+    }
+    return this.appearanceService.deleteAllBackgrounds(body.adminKey);
   }
 }

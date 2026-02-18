@@ -78,6 +78,8 @@ export class AuthService {
         name: user.name,
         email: user.email,
         avatar: user.avatar,
+        displayName: user.displayName,
+        username: user.username,
       },
     };
   }
@@ -130,6 +132,8 @@ export class AuthService {
         name: user.name,
         email: user.email,
         avatar: user.avatar,
+        displayName: user.displayName,
+        username: user.username,
       },
     };
   }
@@ -143,6 +147,7 @@ export class AuthService {
         email: profile.email,
         password: '',
         isVerified: true,
+        avatar: profile.avatar,
       });
       await user.save();
     }
@@ -156,6 +161,8 @@ export class AuthService {
         name: user.name,
         email: user.email,
         avatar: user.avatar,
+        displayName: user.displayName,
+        username: user.username,
       },
     };
   }

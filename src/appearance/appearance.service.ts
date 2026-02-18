@@ -67,30 +67,21 @@ export class AppearanceService {
   async getBackgrounds(userId?: string) {
     const query: any = { isActive: true };
     
-    console.log('getBackgrounds called with userId:', userId);
-    
     if (userId) {
       // Get admin backgrounds + user's own backgrounds
       query.$or = [
         { type: 'admin' },
         { type: 'user', userId: new Types.ObjectId(userId) }
       ];
-      console.log('Query with userId:', JSON.stringify(query));
     } else {
       // Only admin backgrounds if not authenticated
       query.type = 'admin';
-      console.log('Query without userId (admin only)');
     }
 
     const backgrounds = await this.backgroundModel
       .find(query)
       .sort({ createdAt: -1 })
       .exec();
-
-    console.log('Found backgrounds:', backgrounds.length);
-    backgrounds.forEach(bg => {
-      console.log(`- ${bg.name} (type: ${bg.type}, userId: ${bg.userId})`);
-    });
 
     return {
       backgrounds,
@@ -166,5 +157,68 @@ export class AppearanceService {
       message: 'Background updated successfully',
       background: updated,
     };
+  }
+
+  // Delete all backgrounds (admin only)
+  async deleteAllBackgrounds(adminKey: string) {
+    if (adminKey !== process.env.ADMIN_KEY) {
+      throw new ForbiddenException('Invalid admin key');
+    }
+
+    const result = await this.backgroundModel.deleteMany({});
+
+    return {
+      message: 'All backgrounds deleted successfully',
+      deletedCount: result.deletedCount,
+    };
+  }
+
+  // Upload background image
+  async uploadUserBackground(userId: string, file: Express.Multer.File) {
+    if (!file) {
+      throw new NotFoundException('No file uploaded');
+    }
+
+    const cloudinary = require('cloudinary').v2;
+
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'tarpai/backgrounds',
+          public_id: `bg_${userId}_${Date.now()}`,
+        },
+        async (error, result) => {
+          if (error) {
+            console.error('Cloudinary upload error:', error);
+            return reject(error);
+          }
+
+          // Save to database
+          const background = new this.backgroundModel({
+            userId: new Types.ObjectId(userId),
+            url: result.secure_url,
+            name: 'My Background',
+            thumbnail: result.secure_url,
+            isActive: true,
+            type: 'user',
+          });
+
+          await background.save();
+
+          resolve({
+            message: 'Background uploaded successfully',
+            background: {
+              id: background._id,
+              url: background.url,
+              thumbnail: background.thumbnail,
+              name: background.name,
+              type: background.type,
+            },
+          });
+        }
+      );
+
+      uploadStream.end(file.buffer);
+    });
   }
 }
