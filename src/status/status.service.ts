@@ -64,6 +64,13 @@ export class StatusService {
     const statuses = await this.statusModel
       .find({ author: new Types.ObjectId(userId) })
       .populate('author', 'name username avatar')
+      .populate({
+        path: 'originalStatus',
+        populate: {
+          path: 'author',
+          select: 'name username avatar',
+        },
+      })
       .sort({ createdAt: -1 })
       .exec();
 
@@ -72,8 +79,12 @@ export class StatusService {
       content: status.content,
       image: status.image,
       images: status.images,
+      isRepost: status.isRepost,
+      repostContent: status.repostContent,
+      originalStatus: status.originalStatus,
       likesCount: status.likesCount,
       commentsCount: status.commentsCount,
+      repostsCount: status.repostsCount,
       author: status.author,
       createdAt: status.createdAt,
       isLiked: status.likes.some(like => like.toString() === userId),
@@ -238,6 +249,188 @@ export class StatusService {
     await this.statusModel.findByIdAndDelete(statusId);
 
     return { message: 'Status deleted successfully' };
+  }
+
+  async repostStatus(statusId: string, userId: string, repostContent?: string) {
+    const originalStatus = await this.statusModel.findById(statusId);
+    if (!originalStatus) {
+      throw new NotFoundException('Status not found');
+    }
+
+    // Check if user already reposted this status
+    const existingRepost = await this.statusModel.findOne({
+      author: new Types.ObjectId(userId),
+      originalStatus: new Types.ObjectId(statusId),
+      isRepost: true,
+    });
+
+    if (existingRepost) {
+      throw new ForbiddenException('You have already reposted this status');
+    }
+
+    // Create repost
+    const repost = new this.statusModel({
+      author: new Types.ObjectId(userId),
+      content: originalStatus.content,
+      image: originalStatus.image,
+      images: originalStatus.images,
+      originalStatus: new Types.ObjectId(statusId),
+      isRepost: true,
+      repostContent: repostContent || '',
+      likes: [],
+      likesCount: 0,
+      comments: [],
+      commentsCount: 0,
+      reposts: [],
+      repostsCount: 0,
+    });
+
+    await repost.save();
+
+    // Update original status repost count
+    originalStatus.reposts.push(new Types.ObjectId(userId));
+    originalStatus.repostsCount = originalStatus.reposts.length;
+    await originalStatus.save();
+
+    const populatedRepost = await this.statusModel
+      .findById(repost._id)
+      .populate('author', 'name username avatar')
+      .populate({
+        path: 'originalStatus',
+        populate: {
+          path: 'author',
+          select: 'name username avatar',
+        },
+      })
+      .exec();
+
+    return {
+      message: 'Status reposted successfully',
+      repost: {
+        id: populatedRepost._id,
+        content: populatedRepost.content,
+        image: populatedRepost.image,
+        images: populatedRepost.images,
+        repostContent: populatedRepost.repostContent,
+        isRepost: populatedRepost.isRepost,
+        originalStatus: populatedRepost.originalStatus,
+        likesCount: populatedRepost.likesCount,
+        commentsCount: populatedRepost.commentsCount,
+        repostsCount: populatedRepost.repostsCount,
+        author: populatedRepost.author,
+        createdAt: populatedRepost.createdAt,
+        isLiked: false,
+      },
+    };
+  }
+
+  async editAndRepost(statusId: string, userId: string, newContent: string, files?: Express.Multer.File[]) {
+    const originalStatus = await this.statusModel.findById(statusId);
+    if (!originalStatus) {
+      throw new NotFoundException('Status not found');
+    }
+
+    // Check if user already reposted this status
+    const existingRepost = await this.statusModel.findOne({
+      author: new Types.ObjectId(userId),
+      originalStatus: new Types.ObjectId(statusId),
+      isRepost: true,
+    });
+
+    if (existingRepost) {
+      throw new ForbiddenException('You have already reposted this status');
+    }
+
+    let imageUrls: string[] = [];
+
+    // Use original images if no new files provided
+    if (files && files.length > 0) {
+      const uploadPromises = files.map(file => this.cloudinaryService.uploadImage(file));
+      imageUrls = await Promise.all(uploadPromises);
+    } else {
+      imageUrls = originalStatus.images;
+    }
+
+    // Create edited repost
+    const repost = new this.statusModel({
+      author: new Types.ObjectId(userId),
+      content: newContent,
+      image: imageUrls.length > 0 ? imageUrls[0] : originalStatus.image,
+      images: imageUrls,
+      originalStatus: new Types.ObjectId(statusId),
+      isRepost: true,
+      repostContent: `Edited and reposted from original`,
+      likes: [],
+      likesCount: 0,
+      comments: [],
+      commentsCount: 0,
+      reposts: [],
+      repostsCount: 0,
+    });
+
+    await repost.save();
+
+    // Update original status repost count
+    originalStatus.reposts.push(new Types.ObjectId(userId));
+    originalStatus.repostsCount = originalStatus.reposts.length;
+    await originalStatus.save();
+
+    const populatedRepost = await this.statusModel
+      .findById(repost._id)
+      .populate('author', 'name username avatar')
+      .populate({
+        path: 'originalStatus',
+        populate: {
+          path: 'author',
+          select: 'name username avatar',
+        },
+      })
+      .exec();
+
+    return {
+      message: 'Status edited and reposted successfully',
+      repost: {
+        id: populatedRepost._id,
+        content: populatedRepost.content,
+        image: populatedRepost.image,
+        images: populatedRepost.images,
+        repostContent: populatedRepost.repostContent,
+        isRepost: populatedRepost.isRepost,
+        originalStatus: populatedRepost.originalStatus,
+        likesCount: populatedRepost.likesCount,
+        commentsCount: populatedRepost.commentsCount,
+        repostsCount: populatedRepost.repostsCount,
+        author: populatedRepost.author,
+        createdAt: populatedRepost.createdAt,
+        isLiked: false,
+      },
+    };
+  }
+
+  async deleteRepost(statusId: string, userId: string) {
+    // Find the repost by original status and user
+    const repost = await this.statusModel.findOne({
+      author: new Types.ObjectId(userId),
+      originalStatus: new Types.ObjectId(statusId),
+      isRepost: true,
+    });
+
+    if (!repost) {
+      throw new NotFoundException('Repost not found');
+    }
+
+    // Remove repost
+    await this.statusModel.findByIdAndDelete(repost._id);
+
+    // Update original status repost count
+    const originalStatus = await this.statusModel.findById(statusId);
+    if (originalStatus) {
+      originalStatus.reposts = originalStatus.reposts.filter(id => id.toString() !== userId);
+      originalStatus.repostsCount = originalStatus.reposts.length;
+      await originalStatus.save();
+    }
+
+    return { message: 'Repost deleted successfully' };
   }
 
   async updateStatus(

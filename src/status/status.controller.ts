@@ -126,4 +126,35 @@ export class StatusController {
   deleteStatus(@Param('id') id: string, @Req() req) {
     return this.statusService.deleteStatus(id, req.user.id);
   }
+
+  // Repost status (simple repost)
+  @Post(':id/repost')
+  @UseGuards(JwtAuthGuard)
+  repostStatus(
+    @Param('id') id: string,
+    @Body() body: { repostContent?: string },
+    @Req() req,
+  ) {
+    return this.statusService.repostStatus(id, req.user.id, body.repostContent);
+  }
+
+  // Edit and repost status
+  @Post(':id/edit-repost')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FilesInterceptor('images', 10))
+  editAndRepost(
+    @Param('id') id: string,
+    @Body() body: { content: string },
+    @UploadedFiles() files: Express.Multer.File[],
+    @Req() req,
+  ) {
+    return this.statusService.editAndRepost(id, req.user.id, body.content, files);
+  }
+
+  // Delete repost
+  @Delete(':id/repost')
+  @UseGuards(JwtAuthGuard)
+  deleteRepost(@Param('id') id: string, @Req() req) {
+    return this.statusService.deleteRepost(id, req.user.id);
+  }
 }

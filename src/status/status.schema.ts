@@ -41,6 +41,22 @@ export class Status extends Document {
   @Prop({ default: 0 })
   commentsCount: number;
 
+  // Repost fields
+  @Prop({ type: Types.ObjectId, ref: 'Status' })
+  originalStatus?: Types.ObjectId;
+
+  @Prop({ default: false })
+  isRepost: boolean;
+
+  @Prop()
+  repostContent?: string; // Additional content added by reposter
+
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
+  reposts: Types.ObjectId[];
+
+  @Prop({ default: 0 })
+  repostsCount: number;
+
   createdAt?: Date;
   updatedAt?: Date;
 }

@@ -11,6 +11,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { AppearanceModule } from './appearance/appearance.module';
 import { ChannelsModule } from './channels/channels.module';
 import { StatusModule } from './status/status.module';
+import { SupportModule } from './support/support.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -32,6 +34,8 @@ import { StatusModule } from './status/status.module';
     AppearanceModule,
     ChannelsModule,
     StatusModule,
+    SupportModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [AppService],
