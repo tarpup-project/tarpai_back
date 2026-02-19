@@ -9,6 +9,7 @@ import { Conversation, ConversationSchema } from './conversation.schema';
 import { Message, MessageSchema } from './message.schema';
 import { User, UserSchema } from '../users/user.schema';
 import { CloudinaryService } from '../users/cloudinary.service';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { CloudinaryService } from '../users/cloudinary.service';
       }),
       inject: [ConfigService],
     }),
+    NotificationsModule,
   ],
   controllers: [ChatController],
   providers: [ChatService, ChatGateway, CloudinaryService],

@@ -12,9 +12,49 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  // Links Management - Must come before :id routes
+  @Get('links/my')
+  @UseGuards(AuthGuard('jwt'))
+  async getMyLinks(@Req() req) {
+    return this.usersService.getUserLinks(req.user.id);
+  }
+
+  @Post('links')
+  @UseGuards(AuthGuard('jwt'))
+  async addLink(
+    @Body() body: { title: string; url: string },
+    @Req() req,
+  ) {
+    return this.usersService.addLink(req.user.id, body.title, body.url);
+  }
+
+  @Put('links/:linkId')
+  @UseGuards(AuthGuard('jwt'))
+  async updateLink(
+    @Param('linkId') linkId: string,
+    @Body() body: { title?: string; url?: string; order?: number },
+    @Req() req,
+  ) {
+    return this.usersService.updateLink(req.user.id, linkId, body);
+  }
+
+  @Delete('links/:linkId')
+  @UseGuards(AuthGuard('jwt'))
+  async deleteLink(
+    @Param('linkId') linkId: string,
+    @Req() req,
+  ) {
+    return this.usersService.deleteLink(req.user.id, linkId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
+  }
+
+  @Get(':id/links')
+  async getUserLinks(@Param('id') id: string) {
+    return this.usersService.getUserLinks(id);
   }
 
   @Post('profile/setup')
@@ -93,40 +133,5 @@ export class UsersController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.usersService.remove(id);
-  }
-
-  // Links Management
-  @Get('links/my')
-  @UseGuards(AuthGuard('jwt'))
-  async getMyLinks(@Req() req) {
-    return this.usersService.getUserLinks(req.user.id);
-  }
-
-  @Post('links')
-  @UseGuards(AuthGuard('jwt'))
-  async addLink(
-    @Body() body: { title: string; url: string },
-    @Req() req,
-  ) {
-    return this.usersService.addLink(req.user.id, body.title, body.url);
-  }
-
-  @Put('links/:linkId')
-  @UseGuards(AuthGuard('jwt'))
-  async updateLink(
-    @Param('linkId') linkId: string,
-    @Body() body: { title?: string; url?: string; order?: number },
-    @Req() req,
-  ) {
-    return this.usersService.updateLink(req.user.id, linkId, body);
-  }
-
-  @Delete('links/:linkId')
-  @UseGuards(AuthGuard('jwt'))
-  async deleteLink(
-    @Param('linkId') linkId: string,
-    @Req() req,
-  ) {
-    return this.usersService.deleteLink(req.user.id, linkId);
   }
 }

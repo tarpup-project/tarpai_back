@@ -5,6 +5,7 @@ import { Conversation } from './conversation.schema';
 import { Message } from './message.schema';
 import { User } from '../users/user.schema';
 import { CloudinaryService } from '../users/cloudinary.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ChatService {
@@ -13,6 +14,7 @@ export class ChatService {
     @InjectModel(Message.name) private messageModel: Model<Message>,
     @InjectModel(User.name) private userModel: Model<User>,
     private cloudinaryService: CloudinaryService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async createConversation(userId: string, participantId: string) {
@@ -201,11 +203,22 @@ export class ChatService {
     conversation.lastMessage = message._id as any;
     conversation.lastActivity = new Date();
 
-    // Update unread count for other participants
+    // Get sender info for notification
+    const sender = await this.userModel.findById(senderId);
+    const senderName = sender?.displayName || sender?.name || 'Someone';
+
+    // Update unread count and create notification for other participants
     conversation.participants.forEach(participantId => {
       if (participantId.toString() !== senderId) {
         const currentCount = conversation.unreadCount.get(participantId.toString()) || 0;
         conversation.unreadCount.set(participantId.toString(), currentCount + 1);
+        
+        // Create notification for recipient
+        this.notificationsService.createChatNotification(
+          senderId,
+          participantId.toString(),
+          `${senderName}: ${content.length > 50 ? content.substring(0, 50) + '...' : content}`,
+        );
       }
     });
 

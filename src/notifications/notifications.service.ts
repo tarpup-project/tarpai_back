@@ -16,11 +16,15 @@ export class NotificationsService {
     recipientIds: string[],
     message: string,
   ) {
+    // Fetch sender's name
+    const sender = await this.userModel.findById(senderId);
+    const senderName = sender?.displayName || sender?.name || 'Creator';
+    
     const notifications = recipientIds.map((recipientId) => ({
       recipient: new Types.ObjectId(recipientId),
       sender: new Types.ObjectId(senderId),
       type: NotificationType.BROADCAST,
-      title: 'Broadcast from Creator',
+      title: `Broadcast from ${senderName}`,
       message,
       isRead: false,
     }));
@@ -31,12 +35,18 @@ export class NotificationsService {
   async createFollowNotification(followerId: string, followedUserId: string, followerName: string) {
     console.log('Creating follow notification:', { followerId, followedUserId, followerName });
     
+    // Get follower's username for the profile URL
+    const follower = await this.userModel.findById(followerId);
+    const username = follower?.username || followerId;
+    
     const notification = new this.notificationModel({
       recipient: new Types.ObjectId(followedUserId),
       sender: new Types.ObjectId(followerId),
       type: NotificationType.FOLLOW,
       title: 'New Follower',
       message: `${followerName} started following you`,
+      actionUrl: `/profile/${username}`,
+      actionLabel: 'View Profile',
       isRead: false,
     });
 
@@ -56,6 +66,8 @@ export class NotificationsService {
       type: NotificationType.CHAT_MESSAGE,
       title: 'New Message',
       message,
+      actionUrl: `/chat/${senderId}`,
+      actionLabel: 'View Chat',
       isRead: false,
     });
 

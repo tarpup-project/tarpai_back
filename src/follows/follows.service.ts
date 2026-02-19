@@ -74,7 +74,7 @@ export class FollowsService {
   async getFollowers(userId: string) {
     const user = await this.userModel
       .findById(userId)
-      .populate('followers', 'name email avatar bio');
+      .populate('followers', 'name email avatar bio username displayName');
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -89,7 +89,7 @@ export class FollowsService {
   async getFollowing(userId: string) {
     const user = await this.userModel
       .findById(userId)
-      .populate('following', 'name email avatar bio');
+      .populate('following', 'name email avatar bio username displayName');
 
     if (!user) {
       throw new NotFoundException('User not found');

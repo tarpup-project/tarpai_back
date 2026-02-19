@@ -53,6 +53,7 @@ export class UsersService {
     }
 
     return {
+      _id: user._id,
       id: user._id,
       name: user.name,
       username: user.username,
@@ -61,6 +62,8 @@ export class UsersService {
       bio: user.bio,
       avatar: user.avatar,
       isVerified: user.isVerified,
+      followers: user.followers || [],
+      following: user.following || [],
       followersCount: user.followers?.length || 0,
       followingCount: user.following?.length || 0,
       createdAt: user.createdAt,

@@ -163,6 +163,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return { success: true };
   }
 
+  @SubscribeMessage('check_user_status')
+  async handleCheckUserStatus(
+    @MessageBody() data: { userId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    const isOnline = this.isUserOnline(data.userId);
+    client.emit('user_status', { userId: data.userId, isOnline });
+    return { success: true, isOnline };
+  }
+
   // Method to send notification to specific user
   async sendNotificationToUser(userId: string, notification: any) {
     const socketId = this.connectedUsers.get(userId);
