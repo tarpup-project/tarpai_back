@@ -24,6 +24,9 @@ export class Message extends Document {
   @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
   readBy: Types.ObjectId[];
 
+  @Prop({ type: Types.ObjectId, ref: 'Message' })
+  replyTo?: Types.ObjectId;
+
   @Prop({ default: false })
   isEdited: boolean;
 

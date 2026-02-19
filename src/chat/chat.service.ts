@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Conversation } from './conversation.schema';
@@ -6,6 +6,7 @@ import { Message } from './message.schema';
 import { User } from '../users/user.schema';
 import { CloudinaryService } from '../users/cloudinary.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ChatGateway } from './chat.gateway';
 
 @Injectable()
 export class ChatService {
@@ -15,6 +16,8 @@ export class ChatService {
     @InjectModel(User.name) private userModel: Model<User>,
     private cloudinaryService: CloudinaryService,
     private notificationsService: NotificationsService,
+    @Inject(forwardRef(() => ChatGateway))
+    private chatGateway: ChatGateway,
   ) {}
 
   async createConversation(userId: string, participantId: string) {
@@ -140,6 +143,14 @@ export class ChatService {
         isDeleted: false,
       })
       .populate('sender', 'name username avatar')
+      .populate({
+        path: 'replyTo',
+        select: 'content sender',
+        populate: {
+          path: 'sender',
+          select: 'name username avatar',
+        },
+      })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -153,6 +164,11 @@ export class ChatService {
         fileUrl: msg.fileUrl,
         fileName: msg.fileName,
         sender: msg.sender,
+        replyTo: msg.replyTo ? {
+          id: (msg.replyTo as any)._id,
+          content: (msg.replyTo as any).content,
+          sender: (msg.replyTo as any).sender._id,
+        } : undefined,
         isRead: msg.readBy.some(id => id.toString() === userId),
         isEdited: msg.isEdited,
         createdAt: msg.createdAt,
@@ -168,6 +184,7 @@ export class ChatService {
     content: string,
     type: string = 'text',
     file?: Express.Multer.File,
+    replyToId?: string,
   ) {
     const conversation = await this.conversationModel.findById(conversationId);
     
@@ -187,7 +204,7 @@ export class ChatService {
       fileName = file.originalname;
     }
 
-    const message = new this.messageModel({
+    const messageData: any = {
       conversation: new Types.ObjectId(conversationId),
       sender: new Types.ObjectId(senderId),
       content,
@@ -195,7 +212,14 @@ export class ChatService {
       fileUrl,
       fileName,
       readBy: [new Types.ObjectId(senderId)], // Sender has read their own message
-    });
+    };
+
+    // Add reply reference if provided
+    if (replyToId) {
+      messageData.replyTo = new Types.ObjectId(replyToId);
+    }
+
+    const message = new this.messageModel(messageData);
 
     await message.save();
 
@@ -208,38 +232,103 @@ export class ChatService {
     const senderName = sender?.displayName || sender?.name || 'Someone';
 
     // Update unread count and create notification for other participants
+    const notificationPromises: Promise<void>[] = [];
+    
     conversation.participants.forEach(participantId => {
       if (participantId.toString() !== senderId) {
-        const currentCount = conversation.unreadCount.get(participantId.toString()) || 0;
-        conversation.unreadCount.set(participantId.toString(), currentCount + 1);
-        
-        // Create notification for recipient
-        this.notificationsService.createChatNotification(
-          senderId,
+        // Check if the recipient is currently viewing this conversation
+        const isViewingConversation = this.chatGateway.isUserViewingConversation(
           participantId.toString(),
-          `${senderName}: ${content.length > 50 ? content.substring(0, 50) + '...' : content}`,
+          conversationId,
         );
+        
+        // Only increment unread count if NOT viewing the conversation
+        if (!isViewingConversation) {
+          const currentCount = conversation.unreadCount.get(participantId.toString()) || 0;
+          conversation.unreadCount.set(participantId.toString(), currentCount + 1);
+          
+          // Create notification for recipient (async)
+          const notificationPromise = this.notificationsService.createChatNotification(
+            senderId,
+            participantId.toString(),
+            `${senderName}: ${content.length > 50 ? content.substring(0, 50) + '...' : content}`,
+          ).then(() => {
+            // Send real-time notification via socket with complete data
+            this.chatGateway.sendNotificationToUser(participantId.toString(), {
+              _id: new Date().getTime().toString(), // Temporary ID
+              type: 'chat_message',
+              title: 'New Message',
+              message: `${senderName}: ${content.length > 50 ? content.substring(0, 50) + '...' : content}`,
+              isRead: false,
+              createdAt: new Date().toISOString(),
+              sender: {
+                _id: senderId,
+                name: senderName,
+                username: sender?.username || '',
+                avatar: sender?.avatar || '',
+              },
+            });
+          });
+          
+          notificationPromises.push(notificationPromise);
+        }
       }
     });
+
+    // Wait for all notifications to be created
+    await Promise.all(notificationPromises);
 
     await conversation.save();
 
     const populatedMessage = await this.messageModel
       .findById(message._id)
       .populate('sender', 'name username avatar')
+      .populate({
+        path: 'replyTo',
+        select: 'content sender',
+        populate: {
+          path: 'sender',
+          select: 'name username avatar',
+        },
+      })
       .exec();
 
-    return {
+    const messageResponse = {
       id: populatedMessage._id,
       content: populatedMessage.content,
       type: populatedMessage.type,
       fileUrl: populatedMessage.fileUrl,
       fileName: populatedMessage.fileName,
       sender: populatedMessage.sender,
+      replyTo: populatedMessage.replyTo ? {
+        id: (populatedMessage.replyTo as any)._id,
+        content: (populatedMessage.replyTo as any).content,
+        sender: (populatedMessage.replyTo as any).sender._id,
+      } : undefined,
       isRead: false,
       isEdited: populatedMessage.isEdited,
       createdAt: populatedMessage.createdAt,
     };
+
+    // Emit the message via socket to all participants
+    this.chatGateway.server.to(`conversation_${conversationId}`).emit('new_message', messageResponse);
+    
+    // Emit conversation updates to each participant
+    const conversationDoc = await this.conversationModel.findById(conversationId);
+    if (conversationDoc) {
+      conversationDoc.participants.forEach(async (participantId: any) => {
+        const socketId = this.chatGateway['connectedUsers'].get(participantId.toString());
+        if (socketId) {
+          const participantConversation = await this.getConversation(
+            conversationId,
+            participantId.toString(),
+          );
+          this.chatGateway.server.to(socketId).emit('conversation_updated', participantConversation);
+        }
+      });
+    }
+
+    return messageResponse;
   }
 
   async markMessagesAsRead(conversationId: string, userId: string) {
@@ -364,5 +453,9 @@ export class ChatService {
     });
 
     return { totalUnreadCount: totalUnread };
+  }
+
+  async getConversationDocument(conversationId: string) {
+    return this.conversationModel.findById(conversationId).exec();
   }
 }

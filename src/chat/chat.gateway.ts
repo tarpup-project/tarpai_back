@@ -8,7 +8,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { UseGuards } from '@nestjs/common';
+import { Inject, forwardRef } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ChatService } from './chat.service';
 
@@ -26,8 +26,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   server: Server;
 
   private connectedUsers = new Map<string, string>(); // userId -> socketId
+  private activeConversations = new Map<string, Set<string>>(); // conversationId -> Set of userIds viewing it
+  private usersOnChatsPage = new Set<string>(); // userIds currently on the chats page
 
   constructor(
+    @Inject(forwardRef(() => ChatService))
     private chatService: ChatService,
     private jwtService: JwtService,
   ) {}
@@ -72,6 +75,17 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.connectedUsers.delete(client.userId);
       console.log(`User ${client.userId} disconnected`);
       
+      // Remove user from chats page tracking
+      this.usersOnChatsPage.delete(client.userId);
+      
+      // Remove user from all active conversations
+      this.activeConversations.forEach((viewers, conversationId) => {
+        viewers.delete(client.userId!);
+        if (viewers.size === 0) {
+          this.activeConversations.delete(conversationId);
+        }
+      });
+      
       // Notify user is offline
       client.broadcast.emit('user_offline', { userId: client.userId });
     }
@@ -79,7 +93,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('send_message')
   async handleSendMessage(
-    @MessageBody() data: { conversationId: string; content: string; type?: string },
+    @MessageBody() data: { conversationId: string; content: string; type?: string; replyTo?: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
@@ -88,14 +102,29 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.userId,
         data.content,
         data.type || 'text',
+        undefined,
+        data.replyTo,
       );
 
       // Emit to all participants in the conversation
       this.server.to(`conversation_${data.conversationId}`).emit('new_message', message);
       
-      // Update conversation for all participants
-      const conversation = await this.chatService.getConversation(data.conversationId, client.userId);
-      this.server.to(`conversation_${data.conversationId}`).emit('conversation_updated', conversation);
+      // Get conversation document to find all participants
+      const conversationDoc = await this.chatService.getConversationDocument(data.conversationId);
+      if (conversationDoc) {
+        // Emit to each participant individually with their specific unread count
+        conversationDoc.participants.forEach(async (participantId: any) => {
+          const socketId = this.connectedUsers.get(participantId.toString());
+          if (socketId) {
+            // Get conversation with this participant's unread count
+            const participantConversation = await this.chatService.getConversation(
+              data.conversationId,
+              participantId.toString(),
+            );
+            this.server.to(socketId).emit('conversation_updated', participantConversation);
+          }
+        });
+      }
 
       return { success: true, message };
     } catch (error) {
@@ -151,7 +180,41 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     client.join(`conversation_${data.conversationId}`);
-    return { success: true };
+    
+    // Track that this user is viewing this conversation
+    if (!this.activeConversations.has(data.conversationId)) {
+      this.activeConversations.set(data.conversationId, new Set());
+    }
+    
+    const viewers = this.activeConversations.get(data.conversationId)!;
+    
+    // Check if there are already viewers in this conversation
+    const existingViewers = Array.from(viewers);
+    
+    // Add this user to viewers
+    viewers.add(client.userId!);
+    
+    // Notify this user about existing viewers immediately
+    existingViewers.forEach(viewerId => {
+      if (viewerId !== client.userId) {
+        // Send immediately to the joining user
+        client.emit('user_joined_conversation', {
+          conversationId: data.conversationId,
+          userId: viewerId,
+        });
+      }
+    });
+    
+    // Notify other participants in this conversation that this user joined
+    client.to(`conversation_${data.conversationId}`).emit('user_joined_conversation', {
+      conversationId: data.conversationId,
+      userId: client.userId,
+    });
+    
+    return { 
+      success: true,
+      existingViewers: existingViewers.filter(id => id !== client.userId),
+    };
   }
 
   @SubscribeMessage('leave_conversation')
@@ -160,6 +223,91 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     client.leave(`conversation_${data.conversationId}`);
+    
+    // Remove user from active viewers
+    const viewers = this.activeConversations.get(data.conversationId);
+    if (viewers) {
+      viewers.delete(client.userId!);
+      if (viewers.size === 0) {
+        this.activeConversations.delete(data.conversationId);
+      }
+    }
+    
+    // Notify other participants in this conversation that this user left
+    client.to(`conversation_${data.conversationId}`).emit('user_left_conversation', {
+      conversationId: data.conversationId,
+      userId: client.userId,
+    });
+    
+    return { success: true };
+  }
+
+  @SubscribeMessage('check_conversation_viewer')
+  async handleCheckConversationViewer(
+    @MessageBody() data: { conversationId: string; userId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    const isActive = this.isUserActiveInChat(data.userId, data.conversationId);
+    
+    client.emit('conversation_viewer_status', {
+      conversationId: data.conversationId,
+      userId: data.userId,
+      isViewing: isActive, // Show active if viewing conversation OR on chats page
+    });
+    return { success: true, isViewing: isActive };
+  }
+
+  @SubscribeMessage('enter_chats_page')
+  async handleEnterChatsPage(
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    this.usersOnChatsPage.add(client.userId!);
+    console.log(`User ${client.userId} entered chats page`);
+    
+    // Notify all users in conversations with this user that they're now active
+    this.activeConversations.forEach((viewers, conversationId) => {
+      viewers.forEach(viewerId => {
+        if (viewerId !== client.userId) {
+          const socketId = this.connectedUsers.get(viewerId);
+          if (socketId) {
+            this.server.to(socketId).emit('user_joined_conversation', {
+              conversationId,
+              userId: client.userId,
+            });
+          }
+        }
+      });
+    });
+    
+    return { success: true };
+  }
+
+  @SubscribeMessage('leave_chats_page')
+  async handleLeaveChatsPage(
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    this.usersOnChatsPage.delete(client.userId!);
+    console.log(`User ${client.userId} left chats page`);
+    
+    // Notify all users in conversations with this user that they're now inactive
+    // (unless they're still viewing a specific conversation)
+    this.activeConversations.forEach((viewers, conversationId) => {
+      const isStillViewingConversation = viewers.has(client.userId!);
+      if (!isStillViewingConversation) {
+        viewers.forEach(viewerId => {
+          if (viewerId !== client.userId) {
+            const socketId = this.connectedUsers.get(viewerId);
+            if (socketId) {
+              this.server.to(socketId).emit('user_left_conversation', {
+                conversationId,
+                userId: client.userId,
+              });
+            }
+          }
+        });
+      }
+    });
+    
     return { success: true };
   }
 
@@ -173,6 +321,26 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return { success: true, isOnline };
   }
 
+  @SubscribeMessage('delete_message')
+  async handleDeleteMessage(
+    @MessageBody() data: { messageId: string; conversationId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    try {
+      await this.chatService.deleteMessage(data.messageId, client.userId);
+      
+      // Notify all participants in the conversation
+      this.server.to(`conversation_${data.conversationId}`).emit('message_deleted', {
+        messageId: data.messageId,
+        conversationId: data.conversationId,
+      });
+
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
   // Method to send notification to specific user
   async sendNotificationToUser(userId: string, notification: any) {
     const socketId = this.connectedUsers.get(userId);
@@ -184,5 +352,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // Method to check if user is online
   isUserOnline(userId: string): boolean {
     return this.connectedUsers.has(userId);
+  }
+
+  // Method to check if user is viewing a specific conversation (for unread count logic)
+  isUserViewingConversation(userId: string, conversationId: string): boolean {
+    const viewers = this.activeConversations.get(conversationId);
+    return viewers ? viewers.has(userId) : false;
+  }
+
+  // Method to check if user is active (for "Active now" display - includes chats page)
+  isUserActiveInChat(userId: string, conversationId: string): boolean {
+    const isViewingConversation = this.isUserViewingConversation(userId, conversationId);
+    const isOnChatsPage = this.usersOnChatsPage.has(userId);
+    return isViewingConversation || isOnChatsPage;
   }
 }

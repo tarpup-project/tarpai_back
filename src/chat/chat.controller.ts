@@ -50,7 +50,7 @@ export class ChatController {
   @UseInterceptors(FileInterceptor('file'))
   sendMessage(
     @Param('id') conversationId: string,
-    @Body() body: { content: string; type?: string },
+    @Body() body: { content: string; type?: string; replyTo?: string },
     @UploadedFile() file: Express.Multer.File,
     @Req() req,
   ) {
@@ -60,6 +60,7 @@ export class ChatController {
       body.content,
       body.type || 'text',
       file,
+      body.replyTo,
     );
   }
 
