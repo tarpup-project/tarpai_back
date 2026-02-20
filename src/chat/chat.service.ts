@@ -455,6 +455,34 @@ export class ChatService {
     return { totalUnreadCount: totalUnread };
   }
 
+  async checkActiveUsers(conversationIds: string[], userId: string) {
+    const activeStatus: { [conversationId: string]: { [participantId: string]: boolean } } = {};
+    
+    for (const conversationId of conversationIds) {
+      const conversation = await this.conversationModel.findById(conversationId);
+      if (conversation && conversation.participants.some(p => p.toString() === userId)) {
+        activeStatus[conversationId] = {};
+        
+        conversation.participants.forEach(participantId => {
+          if (participantId.toString() !== userId) {
+            const isActive = this.chatGateway.isUserActiveInChat(
+              participantId.toString(),
+              conversationId,
+            );
+            activeStatus[conversationId][participantId.toString()] = isActive;
+          }
+        });
+      }
+    }
+    
+    return activeStatus;
+  }
+
+  async setChatsPageStatus(userId: string, isOnChatsPage: boolean) {
+    this.chatGateway.setUserOnChatsPage(userId, isOnChatsPage);
+    return { success: true };
+  }
+
   async getConversationDocument(conversationId: string) {
     return this.conversationModel.findById(conversationId).exec();
   }

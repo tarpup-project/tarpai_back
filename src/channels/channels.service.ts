@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Channel } from './channel.schema';
@@ -68,6 +68,11 @@ export class ChannelsService {
   }
 
   async getMyChannels(userId: string) {
+    // Validate ObjectId format
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new BadRequestException('Invalid user ID format');
+    }
+
     const channels = await this.channelModel
       .find({ owner: new Types.ObjectId(userId) })
       .sort({ createdAt: -1 })
@@ -106,6 +111,14 @@ export class ChannelsService {
   }
 
   async subscribeToChannel(channelId: string, userId: string) {
+    // Validate ObjectId formats
+    if (!Types.ObjectId.isValid(channelId)) {
+      throw new BadRequestException('Invalid channel ID format');
+    }
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new BadRequestException('Invalid user ID format');
+    }
+
     const channel = await this.channelModel.findById(channelId);
     if (!channel) {
       throw new NotFoundException('Channel not found');
@@ -180,6 +193,14 @@ export class ChannelsService {
   }
 
   async deleteChannel(channelId: string, userId: string) {
+    // Validate ObjectId formats
+    if (!Types.ObjectId.isValid(channelId)) {
+      throw new BadRequestException('Invalid channel ID format');
+    }
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new BadRequestException('Invalid user ID format');
+    }
+
     const channel = await this.channelModel.findById(channelId);
     if (!channel) {
       throw new NotFoundException('Channel not found');
@@ -199,6 +220,14 @@ export class ChannelsService {
 
   // Posts methods
   async createPost(channelId: string, userId: string, content: string) {
+    // Validate ObjectId formats
+    if (!Types.ObjectId.isValid(channelId)) {
+      throw new BadRequestException('Invalid channel ID format');
+    }
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new BadRequestException('Invalid user ID format');
+    }
+
     const channel = await this.channelModel.findById(channelId);
     if (!channel) {
       throw new NotFoundException('Channel not found');
@@ -237,6 +266,11 @@ export class ChannelsService {
   }
 
   async getChannelPosts(channelId: string, userId?: string) {
+    // Validate ObjectId format
+    if (!Types.ObjectId.isValid(channelId)) {
+      throw new BadRequestException('Invalid channel ID format');
+    }
+
     const posts = await this.postModel
       .find({ channel: new Types.ObjectId(channelId) })
       .populate('author', 'name username avatar')
@@ -254,6 +288,14 @@ export class ChannelsService {
   }
 
   async likePost(postId: string, userId: string) {
+    // Validate ObjectId formats
+    if (!Types.ObjectId.isValid(postId)) {
+      throw new BadRequestException('Invalid post ID format');
+    }
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new BadRequestException('Invalid user ID format');
+    }
+
     const post = await this.postModel.findById(postId);
     if (!post) {
       throw new NotFoundException('Post not found');
@@ -276,6 +318,14 @@ export class ChannelsService {
   }
 
   async unlikePost(postId: string, userId: string) {
+    // Validate ObjectId formats
+    if (!Types.ObjectId.isValid(postId)) {
+      throw new BadRequestException('Invalid post ID format');
+    }
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new BadRequestException('Invalid user ID format');
+    }
+
     const post = await this.postModel.findById(postId);
     if (!post) {
       throw new NotFoundException('Post not found');
@@ -292,6 +342,14 @@ export class ChannelsService {
   }
 
   async deletePost(postId: string, userId: string) {
+    // Validate ObjectId formats
+    if (!Types.ObjectId.isValid(postId)) {
+      throw new BadRequestException('Invalid post ID format');
+    }
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new BadRequestException('Invalid user ID format');
+    }
+
     const post = await this.postModel.findById(postId).populate('channel');
     if (!post) {
       throw new NotFoundException('Post not found');

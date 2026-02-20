@@ -27,13 +27,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private connectedUsers = new Map<string, string>(); // userId -> socketId
   private activeConversations = new Map<string, Set<string>>(); // conversationId -> Set of userIds viewing it
-  private usersOnChatsPage = new Set<string>(); // userIds currently on the chats page
+  private usersOnChatsPage = new Map<string, number>(); // userId -> timestamp when they registered on chats page
 
   constructor(
     @Inject(forwardRef(() => ChatService))
     private chatService: ChatService,
     private jwtService: JwtService,
-  ) {}
+  ) {
+    // Clean up stale chats page entries every 60 seconds
+    setInterval(() => {
+      this.cleanupStaleChatsPageEntries();
+    }, 60000);
+  }
 
   async handleConnection(client: AuthenticatedSocket) {
     try {
@@ -53,11 +58,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Join user to their personal room
       client.join(`user_${decoded.id}`);
       
-      // Join user to all their conversation rooms
-      const conversations = await this.chatService.getUserConversations(decoded.id);
-      conversations.forEach(conv => {
-        client.join(`conversation_${conv.id}`);
-      });
+      // Don't automatically join conversation rooms - let them join explicitly when viewing conversations
 
       console.log(`User ${decoded.id} connected with socket ${client.id}`);
       
@@ -257,60 +258,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return { success: true, isViewing: isActive };
   }
 
-  @SubscribeMessage('enter_chats_page')
-  async handleEnterChatsPage(
-    @ConnectedSocket() client: AuthenticatedSocket,
-  ) {
-    this.usersOnChatsPage.add(client.userId!);
-    console.log(`User ${client.userId} entered chats page`);
-    
-    // Notify all users in conversations with this user that they're now active
-    this.activeConversations.forEach((viewers, conversationId) => {
-      viewers.forEach(viewerId => {
-        if (viewerId !== client.userId) {
-          const socketId = this.connectedUsers.get(viewerId);
-          if (socketId) {
-            this.server.to(socketId).emit('user_joined_conversation', {
-              conversationId,
-              userId: client.userId,
-            });
-          }
-        }
-      });
-    });
-    
-    return { success: true };
-  }
-
-  @SubscribeMessage('leave_chats_page')
-  async handleLeaveChatsPage(
-    @ConnectedSocket() client: AuthenticatedSocket,
-  ) {
-    this.usersOnChatsPage.delete(client.userId!);
-    console.log(`User ${client.userId} left chats page`);
-    
-    // Notify all users in conversations with this user that they're now inactive
-    // (unless they're still viewing a specific conversation)
-    this.activeConversations.forEach((viewers, conversationId) => {
-      const isStillViewingConversation = viewers.has(client.userId!);
-      if (!isStillViewingConversation) {
-        viewers.forEach(viewerId => {
-          if (viewerId !== client.userId) {
-            const socketId = this.connectedUsers.get(viewerId);
-            if (socketId) {
-              this.server.to(socketId).emit('user_left_conversation', {
-                conversationId,
-                userId: client.userId,
-              });
-            }
-          }
-        });
-      }
-    });
-    
-    return { success: true };
-  }
-
   @SubscribeMessage('check_user_status')
   async handleCheckUserStatus(
     @MessageBody() data: { userId: string },
@@ -363,7 +310,45 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // Method to check if user is active (for "Active now" display - includes chats page)
   isUserActiveInChat(userId: string, conversationId: string): boolean {
     const isViewingConversation = this.isUserViewingConversation(userId, conversationId);
-    const isOnChatsPage = this.usersOnChatsPage.has(userId);
+    const isOnChatsPage = this.isUserOnChatsPage(userId);
     return isViewingConversation || isOnChatsPage;
+  }
+
+  // Method to check if user is on chats page (with 30 second timeout)
+  private isUserOnChatsPage(userId: string): boolean {
+    const timestamp = this.usersOnChatsPage.get(userId);
+    if (!timestamp) return false;
+    
+    const now = Date.now();
+    const thirtySecondsAgo = now - 30000; // 30 seconds
+    
+    if (timestamp < thirtySecondsAgo) {
+      // Remove stale entry
+      this.usersOnChatsPage.delete(userId);
+      return false;
+    }
+    
+    return true;
+  }
+
+  // Method to register user as being on chats page
+  setUserOnChatsPage(userId: string, isOnChatsPage: boolean) {
+    if (isOnChatsPage) {
+      this.usersOnChatsPage.set(userId, Date.now());
+    } else {
+      this.usersOnChatsPage.delete(userId);
+    }
+  }
+
+  // Cleanup stale chats page entries
+  private cleanupStaleChatsPageEntries() {
+    const now = Date.now();
+    const thirtySecondsAgo = now - 30000;
+    
+    for (const [userId, timestamp] of this.usersOnChatsPage.entries()) {
+      if (timestamp < thirtySecondsAgo) {
+        this.usersOnChatsPage.delete(userId);
+      }
+    }
   }
 }

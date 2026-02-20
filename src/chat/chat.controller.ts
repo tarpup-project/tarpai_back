@@ -97,4 +97,22 @@ export class ChatController {
   getTotalUnreadCount(@Req() req) {
     return this.chatService.getTotalUnreadCount(req.user.id);
   }
+
+  // Check if users are active in conversations (for polling from chats page)
+  @Post('check-active-users')
+  checkActiveUsers(
+    @Body() body: { conversationIds: string[] },
+    @Req() req,
+  ) {
+    return this.chatService.checkActiveUsers(body.conversationIds, req.user.id);
+  }
+
+  // Register/unregister user on chats page
+  @Post('chats-page-status')
+  setChatsPageStatus(
+    @Body() body: { isOnChatsPage: boolean },
+    @Req() req,
+  ) {
+    return this.chatService.setChatsPageStatus(req.user.id, body.isOnChatsPage);
+  }
 }
