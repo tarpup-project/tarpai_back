@@ -291,6 +291,51 @@ export class UsersService {
     };
   }
 
+  async reorderLink(userId: string, linkId: string) {
+    const link = await this.linkModel.findById(linkId);
+
+    if (!link) {
+      throw new NotFoundException('Link not found');
+    }
+
+    if (link.userId.toString() !== userId) {
+      throw new ForbiddenException('You can only reorder your own links');
+    }
+
+    // Get all user's links sorted by current order
+    const allLinks = await this.linkModel
+      .find({ userId: new Types.ObjectId(userId), isActive: true })
+      .sort({ order: 1 })
+      .exec();
+
+    // Find the link to move
+    const linkToMove = allLinks.find(l => l._id.toString() === linkId);
+    if (!linkToMove) {
+      throw new NotFoundException('Link not found in user links');
+    }
+
+    // Remove the link from its current position
+    const otherLinks = allLinks.filter(l => l._id.toString() !== linkId);
+
+    // Set the moved link to order 0
+    linkToMove.order = 0;
+    await linkToMove.save();
+
+    // Update all other links to shift down by 1
+    for (let i = 0; i < otherLinks.length; i++) {
+      otherLinks[i].order = i + 1;
+      await otherLinks[i].save();
+    }
+
+    return { 
+      message: 'Link moved to top successfully',
+      links: await this.linkModel
+        .find({ userId: new Types.ObjectId(userId), isActive: true })
+        .sort({ order: 1 })
+        .exec()
+    };
+  }
+
   async deleteLink(userId: string, linkId: string) {
     const link = await this.linkModel.findById(linkId);
 

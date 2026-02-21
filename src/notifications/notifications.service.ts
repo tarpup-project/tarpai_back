@@ -108,28 +108,35 @@ export class NotificationsService {
     return result;
   }
 
-  async getMyNotifications(userId: string, limit = 50) {
-    console.log('Getting notifications for user:', userId);
+  async getMyNotifications(userId: string, limit = 50, offset = 0) {
+    console.log('Getting notifications for user:', userId, 'limit:', limit, 'offset:', offset);
     
     const notifications = await this.notificationModel
       .find({ recipient: new Types.ObjectId(userId) })
       .populate('sender', 'name username avatar')
       .sort({ createdAt: -1 })
+      .skip(offset)
       .limit(limit)
       .exec();
 
     console.log('Found notifications:', notifications.length);
+
+    const totalCount = await this.notificationModel.countDocuments({
+      recipient: new Types.ObjectId(userId),
+    });
 
     const unreadCount = await this.notificationModel.countDocuments({
       recipient: new Types.ObjectId(userId),
       isRead: false,
     });
 
-    console.log('Unread count:', unreadCount);
+    console.log('Total count:', totalCount, 'Unread count:', unreadCount);
 
     return {
       notifications,
       unreadCount,
+      totalCount,
+      hasMore: offset + notifications.length < totalCount,
     };
   }
 

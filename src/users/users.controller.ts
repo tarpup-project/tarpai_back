@@ -28,7 +28,7 @@ export class UsersController {
     return this.usersService.addLink(req.user.id, body.title, body.url);
   }
 
-  @Put('links/:linkId')
+  @Patch('links/:linkId')
   @UseGuards(AuthGuard('jwt'))
   async updateLink(
     @Param('linkId') linkId: string,
@@ -36,6 +36,15 @@ export class UsersController {
     @Req() req,
   ) {
     return this.usersService.updateLink(req.user.id, linkId, body);
+  }
+
+  @Patch('links/:linkId/reorder')
+  @UseGuards(AuthGuard('jwt'))
+  async reorderLink(
+    @Param('linkId') linkId: string,
+    @Req() req,
+  ) {
+    return this.usersService.reorderLink(req.user.id, linkId);
   }
 
   @Delete('links/:linkId')

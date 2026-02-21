@@ -8,8 +8,12 @@ export class NotificationsController {
 
   @Get()
   @UseGuards(AuthGuard('jwt'))
-  async getMyNotifications(@Req() req, @Query('limit') limit?: number) {
-    return this.notificationsService.getMyNotifications(req.user.id, limit);
+  async getMyNotifications(
+    @Req() req, 
+    @Query('limit') limit?: number,
+    @Query('offset') offset?: number,
+  ) {
+    return this.notificationsService.getMyNotifications(req.user.id, limit, offset);
   }
 
   @Patch(':id/read')
