@@ -77,7 +77,7 @@ export class UsersService {
     }
 
     // Generate profile URL - adjust this to match your frontend URL structure
-    const profileUrl = `${process.env.FRONTEND_URL || 'https://tarpai.app'}/profile/${user.username || user._id}`;
+    const profileUrl = `${process.env.FRONTEND_URL || 'https://tarpai.app'}/${user.username || user._id}`;
     
     // Generate QR code as buffer
     const qrCodeBuffer = await QRCode.toBuffer(profileUrl, {
@@ -124,7 +124,7 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    const profileUrl = `${process.env.FRONTEND_URL || 'https://tarpai.app'}/profile/${user.username || user._id}`;
+    const profileUrl = `${process.env.FRONTEND_URL || 'https://tarpai.app'}/${user.username || user._id}`;
     const qrCode = await this.generateProfileQRCode(userId);
 
     return {
