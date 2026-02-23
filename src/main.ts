@@ -10,6 +10,7 @@ async function bootstrap() {
       'http://localhost:3001', 
       'http://localhost:3000',
       'https://tarpai-front.onrender.com',
+      'https://tarpai-front-1.onrender.com',
       process.env.FRONTEND_URL
     ].filter(Boolean),
     credentials: true,
