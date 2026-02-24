@@ -20,8 +20,8 @@ export class Status extends Document {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   author: Types.ObjectId;
 
-  @Prop({ required: true })
-  content: string;
+  @Prop()
+  content?: string;
 
   @Prop()
   image?: string;

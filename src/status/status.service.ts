@@ -26,9 +26,14 @@ export class StatusService {
       imageUrls = await Promise.all(uploadPromises);
     }
 
+    // Ensure at least content or images are provided
+    if (!content?.trim() && imageUrls.length === 0) {
+      throw new ForbiddenException('Status must have either content or images');
+    }
+
     const status = new this.statusModel({
       author: new Types.ObjectId(userId),
-      content,
+      content: content?.trim() || undefined,
       image: imageUrls.length > 0 ? imageUrls[0] : undefined, // Keep backward compatibility
       images: imageUrls,
       likes: [],
@@ -122,6 +127,26 @@ export class StatusService {
       author: status.author,
       createdAt: status.createdAt,
       isLiked: status.likes.some(like => like.toString() === userId),
+    }));
+  }
+
+  async getUserStatuses(userId: string, currentUserId?: string) {
+    const statuses = await this.statusModel
+      .find({ author: new Types.ObjectId(userId) })
+      .populate('author', 'name username avatar')
+      .sort({ createdAt: -1 })
+      .exec();
+
+    return statuses.map(status => ({
+      id: status._id,
+      content: status.content,
+      image: status.image,
+      images: status.images,
+      likesCount: status.likesCount,
+      commentsCount: status.commentsCount,
+      author: status.author,
+      createdAt: status.createdAt,
+      isLiked: currentUserId ? status.likes.some(like => like.toString() === currentUserId) : false,
     }));
   }
 

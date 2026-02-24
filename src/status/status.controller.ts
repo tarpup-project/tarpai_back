@@ -50,6 +50,27 @@ export class StatusController {
     return this.statusService.getFollowingStatuses(req.user.id);
   }
 
+  // Get statuses by user ID
+  @Get('user/:userId')
+  async getUserStatuses(
+    @Param('userId') userId: string,
+    @Headers('authorization') auth?: string,
+  ) {
+    let currentUserId: string | undefined;
+
+    if (auth && auth.startsWith('Bearer ')) {
+      try {
+        const token = auth.substring(7);
+        const decoded = this.jwtService.verify(token);
+        currentUserId = decoded.id;
+      } catch (error) {
+        currentUserId = undefined;
+      }
+    }
+
+    return this.statusService.getUserStatuses(userId, currentUserId);
+  }
+
   // Get all statuses (public feed)
   @Get('all')
   async getAllStatuses(@Headers('authorization') auth?: string) {

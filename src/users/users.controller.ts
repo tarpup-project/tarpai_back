@@ -19,6 +19,16 @@ export class UsersController {
     return this.usersService.getUserLinks(req.user.id);
   }
 
+  // Search users - Must come before :id route
+  @Get('search')
+  async searchUsers(@Req() req) {
+    const query = req.query.query as string;
+    if (!query) {
+      return [];
+    }
+    return this.usersService.searchUsers(query);
+  }
+
   @Post('links')
   @UseGuards(AuthGuard('jwt'))
   async addLink(

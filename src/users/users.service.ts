@@ -40,6 +40,29 @@ export class UsersService {
     }));
   }
 
+  async searchUsers(query: string): Promise<any[]> {
+    const users = await this.userModel
+      .find({
+        $or: [
+          { name: { $regex: query, $options: 'i' } },
+          { username: { $regex: query, $options: 'i' } },
+          { displayName: { $regex: query, $options: 'i' } },
+        ],
+      })
+      .select('-password -verificationCode -verificationCodeExpires')
+      .limit(10)
+      .exec();
+
+    return users.map(user => ({
+      id: user._id,
+      name: user.name,
+      username: user.username,
+      displayName: user.displayName,
+      avatar: user.avatar,
+      bio: user.bio,
+    }));
+  }
+
   async findOne(id: string): Promise<any> {
     const user = await this.userModel
       .findById(id)
