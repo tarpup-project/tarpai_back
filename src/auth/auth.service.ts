@@ -18,6 +18,39 @@ export class AuthService {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
+  private async generateUniqueUsername(baseName: string): Promise<string> {
+    // Remove spaces and special characters, convert to lowercase
+    let baseUsername = baseName
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .substring(0, 15);
+
+    if (!baseUsername) {
+      baseUsername = 'user';
+    }
+
+    // Try the base username first
+    let username = baseUsername;
+    let exists = await this.userModel.findOne({ username });
+    
+    // If exists, append random numbers until we find a unique one
+    let counter = 1;
+    while (exists) {
+      const randomNum = Math.floor(Math.random() * 9999);
+      username = `${baseUsername}${randomNum}`;
+      exists = await this.userModel.findOne({ username });
+      counter++;
+      
+      // Safety check to prevent infinite loop
+      if (counter > 100) {
+        username = `${baseUsername}${Date.now()}`;
+        break;
+      }
+    }
+
+    return username;
+  }
+
   async signup(name: string, email: string, password: string) {
     const existingUser = await this.userModel.findOne({ email });
     if (existingUser) {
@@ -27,11 +60,13 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(password, 10);
     const verificationCode = this.generateVerificationCode();
     const verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const username = await this.generateUniqueUsername(name);
 
     const user = new this.userModel({
       name,
       email,
       password: hashedPassword,
+      username,
       isVerified: false,
       verificationCode,
       verificationCodeExpires,
@@ -142,10 +177,12 @@ export class AuthService {
     let user = await this.userModel.findOne({ email: profile.email });
 
     if (!user) {
+      const username = await this.generateUniqueUsername(profile.name);
       user = new this.userModel({
         name: profile.name,
         email: profile.email,
         password: '',
+        username,
         isVerified: true,
         avatar: profile.avatar,
       });
