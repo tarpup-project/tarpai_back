@@ -153,10 +153,10 @@ export class StatusController {
   @UseGuards(JwtAuthGuard)
   repostStatus(
     @Param('id') id: string,
-    @Body() body: { repostContent?: string },
+    @Body() body: { repostContent?: string } = {},
     @Req() req,
   ) {
-    return this.statusService.repostStatus(id, req.user.id, body.repostContent);
+    return this.statusService.repostStatus(id, req.user.id, body?.repostContent);
   }
 
   // Edit and repost status
