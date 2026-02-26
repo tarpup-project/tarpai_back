@@ -60,13 +60,81 @@ export class ChatService {
     return this.getConversation(conversation._id.toString(), userId);
   }
 
+  async createGroupConversation(userId: string, participantIds: string[], groupName?: string) {
+    // Validate that we have at least 2 participants (excluding creator)
+    if (!participantIds || participantIds.length < 1) {
+      throw new ForbiddenException('Group must have at least 2 members');
+    }
+
+    // Remove duplicates and ensure creator is not in the list
+    const uniqueParticipantIds = [...new Set(participantIds)].filter(id => id !== userId);
+
+    if (uniqueParticipantIds.length < 1) {
+      throw new ForbiddenException('Group must have at least 2 members');
+    }
+
+    // Verify all participants exist
+    const participants = await this.userModel.find({
+      _id: { $in: uniqueParticipantIds.map(id => new Types.ObjectId(id)) },
+    });
+
+    if (participants.length !== uniqueParticipantIds.length) {
+      throw new NotFoundException('One or more participants not found');
+    }
+
+    // Create all participant IDs including creator
+    const allParticipantIds = [userId, ...uniqueParticipantIds];
+
+    // Generate group name if not provided
+    let finalGroupName = groupName;
+    if (!finalGroupName) {
+      // Get names of all participants
+      const allUsers = await this.userModel.find({
+        _id: { $in: allParticipantIds.map(id => new Types.ObjectId(id)) },
+      });
+      
+      const names = allUsers.map(u => u.displayName || u.name).slice(0, 3);
+      finalGroupName = names.join(', ');
+      if (allUsers.length > 3) {
+        finalGroupName += ` +${allUsers.length - 3}`;
+      }
+    }
+
+    const conversation = new this.conversationModel({
+      participants: allParticipantIds.map(id => new Types.ObjectId(id)),
+      lastActivity: new Date(),
+      unreadCount: new Map(),
+      isActive: true,
+      isGroup: true,
+      groupName: finalGroupName,
+    });
+
+    await conversation.save();
+
+    // Return populated conversation
+    const populatedConversation = await this.conversationModel
+      .findById(conversation._id)
+      .populate('participants', 'name displayName username avatar')
+      .exec();
+
+    return {
+      id: populatedConversation._id,
+      isGroup: true,
+      groupName: populatedConversation.groupName,
+      participants: populatedConversation.participants,
+      lastMessage: null,
+      unreadCount: 0,
+      lastActivity: populatedConversation.lastActivity,
+    };
+  }
+
   async getUserConversations(userId: string) {
     const conversations = await this.conversationModel
       .find({
         participants: new Types.ObjectId(userId),
         isActive: true,
       })
-      .populate('participants', 'name username avatar')
+      .populate('participants', 'name displayName username avatar')
       .populate({
         path: 'lastMessage',
         populate: {
@@ -78,23 +146,38 @@ export class ChatService {
       .exec();
 
     return conversations.map(conv => {
-      const otherParticipant = conv.participants.find(p => p._id.toString() !== userId);
       const unreadCount = conv.unreadCount.get(userId) || 0;
 
-      return {
-        id: conv._id,
-        participant: otherParticipant,
-        lastMessage: conv.lastMessage,
-        unreadCount,
-        lastActivity: conv.lastActivity,
-      };
+      if (conv.isGroup) {
+        // Group conversation
+        return {
+          id: conv._id,
+          isGroup: true,
+          groupName: conv.groupName,
+          participants: conv.participants,
+          lastMessage: conv.lastMessage,
+          unreadCount,
+          lastActivity: conv.lastActivity,
+        };
+      } else {
+        // Direct message
+        const otherParticipant = conv.participants.find(p => p._id.toString() !== userId);
+        return {
+          id: conv._id,
+          isGroup: false,
+          participant: otherParticipant,
+          lastMessage: conv.lastMessage,
+          unreadCount,
+          lastActivity: conv.lastActivity,
+        };
+      }
     });
   }
 
   async getConversation(conversationId: string, userId: string) {
     const conversation = await this.conversationModel
       .findById(conversationId)
-      .populate('participants', 'name username avatar')
+      .populate('participants', 'name displayName username avatar')
       .populate({
         path: 'lastMessage',
         populate: {
@@ -112,16 +195,31 @@ export class ChatService {
       throw new ForbiddenException('You are not a participant in this conversation');
     }
 
-    const otherParticipant = conversation.participants.find(p => p._id.toString() !== userId);
     const unreadCount = conversation.unreadCount.get(userId) || 0;
 
-    return {
-      id: conversation._id,
-      participant: otherParticipant,
-      lastMessage: conversation.lastMessage,
-      unreadCount,
-      lastActivity: conversation.lastActivity,
-    };
+    if (conversation.isGroup) {
+      // Group conversation
+      return {
+        id: conversation._id,
+        isGroup: true,
+        groupName: conversation.groupName,
+        participants: conversation.participants,
+        lastMessage: conversation.lastMessage,
+        unreadCount,
+        lastActivity: conversation.lastActivity,
+      };
+    } else {
+      // Direct message
+      const otherParticipant = conversation.participants.find(p => p._id.toString() !== userId);
+      return {
+        id: conversation._id,
+        isGroup: false,
+        participant: otherParticipant,
+        lastMessage: conversation.lastMessage,
+        unreadCount,
+        lastActivity: conversation.lastActivity,
+      };
+    }
   }
 
   async getConversationMessages(conversationId: string, userId: string, page: number = 1, limit: number = 50) {

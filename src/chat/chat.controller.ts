@@ -23,6 +23,15 @@ export class ChatController {
     return this.chatService.createConversation(req.user.id, body.participantId);
   }
 
+  // Create group conversation
+  @Post('group')
+  createGroupConversation(
+    @Body() body: { participantIds: string[]; groupName?: string },
+    @Req() req,
+  ) {
+    return this.chatService.createGroupConversation(req.user.id, body.participantIds, body.groupName);
+  }
+
   // Get single conversation
   @Get('conversations/:id')
   getConversation(@Param('id') id: string, @Req() req) {

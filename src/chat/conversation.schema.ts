@@ -18,6 +18,12 @@ export class Conversation extends Document {
   @Prop({ default: true })
   isActive: boolean;
 
+  @Prop({ default: false })
+  isGroup: boolean;
+
+  @Prop({ type: String })
+  groupName?: string;
+
   createdAt?: Date;
   updatedAt?: Date;
 }
