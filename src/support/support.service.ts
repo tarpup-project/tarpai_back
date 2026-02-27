@@ -4,6 +4,7 @@ import { Model, Types } from 'mongoose';
 import { Feedback } from './feedback.schema';
 import { HelpArticle } from './help-article.schema';
 import { ReleaseNote } from './release-note.schema';
+import { Lead } from './lead.schema';
 
 @Injectable()
 export class SupportService {
@@ -11,6 +12,7 @@ export class SupportService {
     @InjectModel(Feedback.name) private feedbackModel: Model<Feedback>,
     @InjectModel(HelpArticle.name) private helpArticleModel: Model<HelpArticle>,
     @InjectModel(ReleaseNote.name) private releaseNoteModel: Model<ReleaseNote>,
+    @InjectModel(Lead.name) private leadModel: Model<Lead>,
   ) {}
 
   // Feedback methods
@@ -37,6 +39,39 @@ export class SupportService {
         rating: feedback.rating,
         message: feedback.message,
         createdAt: feedback.createdAt,
+      },
+    };
+  }
+
+  async submitLead(
+    name: string,
+    email: string,
+    action?: string,
+    pagePath?: string,
+    targetUserId?: string,
+    targetUsername?: string,
+  ) {
+    const lead = new this.leadModel({
+      name,
+      email,
+      action,
+      pagePath,
+      targetUserId: targetUserId ? new Types.ObjectId(targetUserId) : undefined,
+      targetUsername,
+    });
+
+    await lead.save();
+
+    return {
+      message: 'Lead captured successfully',
+      lead: {
+        id: lead._id,
+        name: lead.name,
+        email: lead.email,
+        action: lead.action,
+        pagePath: lead.pagePath,
+        targetUsername: lead.targetUsername,
+        createdAt: lead.createdAt,
       },
     };
   }

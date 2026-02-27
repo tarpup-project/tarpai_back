@@ -7,6 +7,7 @@ import { User } from '../users/user.schema';
 import { CloudinaryService } from '../users/cloudinary.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ChatGateway } from './chat.gateway';
+import { EmailService } from '../auth/email.service';
 
 @Injectable()
 export class ChatService {
@@ -18,6 +19,7 @@ export class ChatService {
     private notificationsService: NotificationsService,
     @Inject(forwardRef(() => ChatGateway))
     private chatGateway: ChatGateway,
+    private emailService: EmailService,
   ) {}
 
   async createConversation(userId: string, participantId: string) {
@@ -294,6 +296,24 @@ export class ChatService {
       throw new ForbiddenException('You are not a participant in this conversation');
     }
 
+    // Check if sender is a silent signup user and count their messages
+    const sender = await this.userModel.findById(senderId);
+    if (sender && sender.isSilentSignup) {
+      // Count how many messages this user has sent in this conversation
+      const messageCount = await this.messageModel.countDocuments({
+        conversation: new Types.ObjectId(conversationId),
+        sender: new Types.ObjectId(senderId),
+        isDeleted: false,
+      });
+
+      // If they've already sent 1 message (this will be their 2nd), upgrade them to normal user
+      if (messageCount >= 1) {
+        console.log(`Silent signup user ${senderId} has sent ${messageCount + 1} messages, upgrading to normal user`);
+        sender.isSilentSignup = false;
+        await sender.save();
+      }
+    }
+
     let fileUrl: string | undefined;
     let fileName: string | undefined;
 
@@ -326,7 +346,6 @@ export class ChatService {
     conversation.lastActivity = new Date();
 
     // Get sender info for notification
-    const sender = await this.userModel.findById(senderId);
     const senderName = sender?.displayName || sender?.name || 'Someone';
 
     // Update unread count and create notification for other participants
@@ -334,23 +353,31 @@ export class ChatService {
     
     conversation.participants.forEach(participantId => {
       if (participantId.toString() !== senderId) {
+        console.log('=== Processing participant for notification ===');
+        console.log('Participant ID:', participantId.toString());
+        console.log('Sender ID:', senderId);
+        
         // Check if the recipient is currently viewing this conversation
         const isViewingConversation = this.chatGateway.isUserViewingConversation(
           participantId.toString(),
           conversationId,
         );
         
+        console.log('Is viewing conversation:', isViewingConversation);
+        
         // Only increment unread count if NOT viewing the conversation
         if (!isViewingConversation) {
           const currentCount = conversation.unreadCount.get(participantId.toString()) || 0;
           conversation.unreadCount.set(participantId.toString(), currentCount + 1);
+          
+          console.log('Creating notification for participant:', participantId.toString());
           
           // Create notification for recipient (async)
           const notificationPromise = this.notificationsService.createChatNotification(
             senderId,
             participantId.toString(),
             `${senderName}: ${content.length > 50 ? content.substring(0, 50) + '...' : content}`,
-          ).then(() => {
+          ).then(async () => {
             // Send real-time notification via socket with complete data
             this.chatGateway.sendNotificationToUser(participantId.toString(), {
               _id: new Date().getTime().toString(), // Temporary ID
@@ -366,9 +393,37 @@ export class ChatService {
                 avatar: sender?.avatar || '',
               },
             });
+            
+            console.log('Fetching recipient details for email check...');
+            // Send email notification if recipient is a silent signup user
+            const recipient = await this.userModel.findById(participantId);
+            console.log('Recipient found:', recipient ? {
+              id: recipient._id,
+              name: recipient.name,
+              email: recipient.email,
+              isSilentSignup: recipient.isSilentSignup
+            } : 'null');
+            
+            if (recipient && recipient.isSilentSignup) {
+              console.log('Recipient is a silent signup user, sending email notification...');
+              await this.emailService.sendChatReplyNotification(
+                recipient.email,
+                recipient.displayName || recipient.name,
+                senderName,
+                content,
+                conversationId,
+              );
+              console.log('Email notification sent successfully');
+            } else {
+              console.log('Recipient is NOT a silent signup user or not found, skipping email');
+            }
+          }).catch(error => {
+            console.error('Error in notification promise:', error);
           });
           
           notificationPromises.push(notificationPromise);
+        } else {
+          console.log('Participant is viewing conversation, skipping notification');
         }
       }
     });

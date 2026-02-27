@@ -14,6 +14,25 @@ export class AuthController {
     return this.authService.signup(body.name, body.email, body.password);
   }
 
+  @Post('silent-signup')
+  async silentSignup(
+    @Body() body: { 
+      name: string; 
+      email: string; 
+      password: string;
+      source?: string;
+      referrerId?: string;
+    },
+  ) {
+    return this.authService.silentSignup(
+      body.name, 
+      body.email, 
+      body.password,
+      body.source,
+      body.referrerId
+    );
+  }
+
   @Post('verify-email')
   async verifyEmail(@Body() body: { email: string; code: string }) {
     return this.authService.verifyEmail(body.email, body.code);

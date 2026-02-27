@@ -39,6 +39,15 @@ export class User extends Document {
   @Prop({ default: 'https://res.cloudinary.com/dhjzwncjf/image/upload/v1771255225/Screenshot_2026-02-16_at_4.20.04_pm_paes1n.png' })
   avatar: string;
 
+  @Prop({ default: false })
+  isSilentSignup: boolean;
+
+  @Prop()
+  silentSignupSource: string; // 'profile_follow', 'profile_followers', 'profile_following', 'profile_tarpup'
+
+  @Prop()
+  silentSignupReferrer: Types.ObjectId; // The user whose profile they were viewing
+
   createdAt?: Date;
   updatedAt?: Date;
 }

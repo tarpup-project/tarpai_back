@@ -10,6 +10,28 @@ export class SupportController {
     private readonly jwtService: JwtService,
   ) {}
 
+  @Post('lead')
+  async submitLead(
+    @Body()
+    body: {
+      name: string;
+      email: string;
+      action?: string;
+      pagePath?: string;
+      targetUserId?: string;
+      targetUsername?: string;
+    },
+  ) {
+    return this.supportService.submitLead(
+      body.name,
+      body.email,
+      body.action,
+      body.pagePath,
+      body.targetUserId,
+      body.targetUsername,
+    );
+  }
+
   // Submit feedback
   @Post('feedback')
   async submitFeedback(

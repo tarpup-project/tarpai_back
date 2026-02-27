@@ -10,6 +10,7 @@ import { Message, MessageSchema } from './message.schema';
 import { User, UserSchema } from '../users/user.schema';
 import { CloudinaryService } from '../users/cloudinary.service';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { EmailService } from '../auth/email.service';
 
 @Module({
   imports: [
@@ -29,7 +30,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     NotificationsModule,
   ],
   controllers: [ChatController],
-  providers: [ChatService, ChatGateway, CloudinaryService],
+  providers: [ChatService, ChatGateway, CloudinaryService, EmailService],
   exports: [ChatService, ChatGateway],
 })
 export class ChatModule {}

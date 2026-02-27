@@ -81,6 +81,49 @@ export class AuthService {
     };
   }
 
+  async silentSignup(
+    name: string, 
+    email: string, 
+    password: string,
+    source?: string,
+    referrerId?: string
+  ) {
+    const existingUser = await this.userModel.findOne({ email });
+    if (existingUser) {
+      throw new ConflictException('Email already exists');
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const username = await this.generateUniqueUsername(name);
+
+    const user = new this.userModel({
+      name,
+      email,
+      password: hashedPassword,
+      username,
+      isVerified: true, // Auto-verify silent signups
+      isSilentSignup: true,
+      silentSignupSource: source,
+      silentSignupReferrer: referrerId,
+    });
+
+    await user.save();
+
+    const token = this.jwtService.sign({ id: user._id, email: user.email });
+
+    return {
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        displayName: user.displayName,
+        username: user.username,
+      },
+    };
+  }
+
   async verifyEmail(email: string, code: string) {
     const user = await this.userModel.findOne({ email });
     if (!user) {
@@ -186,6 +229,20 @@ export class AuthService {
         isVerified: true,
         avatar: profile.avatar,
       });
+      await user.save();
+    } else {
+      // If user exists and logs in with Google, upgrade them to a normal user
+      // Clear silent signup status since they've now authenticated properly
+      if (user.isSilentSignup) {
+        user.isSilentSignup = false;
+        // Keep the source and referrer for analytics, but mark them as no longer silent
+      }
+      
+      // Update avatar if they don't have one or have the default avatar
+      if (!user.avatar || user.avatar === 'https://res.cloudinary.com/dhjzwncjf/image/upload/v1771255225/Screenshot_2026-02-16_at_4.20.04_pm_paes1n.png') {
+        user.avatar = profile.avatar;
+      }
+      
       await user.save();
     }
 
