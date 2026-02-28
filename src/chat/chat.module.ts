@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
 import { ChatGateway } from './chat.gateway';
+import { AiService } from './ai.service';
 import { Conversation, ConversationSchema } from './conversation.schema';
 import { Message, MessageSchema } from './message.schema';
 import { User, UserSchema } from '../users/user.schema';
@@ -30,7 +31,7 @@ import { EmailService } from '../auth/email.service';
     NotificationsModule,
   ],
   controllers: [ChatController],
-  providers: [ChatService, ChatGateway, CloudinaryService, EmailService],
+  providers: [ChatService, ChatGateway, CloudinaryService, EmailService, AiService],
   exports: [ChatService, ChatGateway],
 })
 export class ChatModule {}

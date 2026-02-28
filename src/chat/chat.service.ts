@@ -8,6 +8,7 @@ import { CloudinaryService } from '../users/cloudinary.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ChatGateway } from './chat.gateway';
 import { EmailService } from '../auth/email.service';
+import { AiService } from './ai.service';
 
 @Injectable()
 export class ChatService {
@@ -20,6 +21,7 @@ export class ChatService {
     @Inject(forwardRef(() => ChatGateway))
     private chatGateway: ChatGateway,
     private emailService: EmailService,
+    private aiService: AiService,
   ) {}
 
   async createConversation(userId: string, participantId: string) {
@@ -348,6 +350,13 @@ export class ChatService {
     // Get sender info for notification
     const senderName = sender?.displayName || sender?.name || 'Someone';
 
+    // Check if message is urgent using AI (only for text messages)
+    let isUrgent = false;
+    if (type === 'text' && content && content.trim().length > 0) {
+      isUrgent = await this.aiService.isMessageUrgent(content);
+      console.log('Message urgency check:', isUrgent ? 'URGENT' : 'NORMAL');
+    }
+
     // Update unread count and create notification for other participants
     const notificationPromises: Promise<void>[] = [];
     
@@ -404,18 +413,35 @@ export class ChatService {
               isSilentSignup: recipient.isSilentSignup
             } : 'null');
             
-            if (recipient && recipient.isSilentSignup) {
-              console.log('Recipient is a silent signup user, sending email notification...');
-              await this.emailService.sendChatReplyNotification(
-                recipient.email,
-                recipient.displayName || recipient.name,
-                senderName,
-                content,
-                conversationId,
-              );
-              console.log('Email notification sent successfully');
+            if (recipient) {
+              // Send urgent email to ALL users if message is urgent
+              if (isUrgent) {
+                console.log('Message is URGENT, sending urgent email notification to:', recipient.email);
+                await this.emailService.sendUrgentMessageNotification(
+                  recipient.email,
+                  recipient.displayName || recipient.name,
+                  senderName,
+                  content,
+                  conversationId,
+                );
+                console.log('Urgent email notification sent successfully');
+              } 
+              // Send regular email only to silent signup users
+              else if (recipient.isSilentSignup) {
+                console.log('Recipient is a silent signup user, sending regular email notification...');
+                await this.emailService.sendChatReplyNotification(
+                  recipient.email,
+                  recipient.displayName || recipient.name,
+                  senderName,
+                  content,
+                  conversationId,
+                );
+                console.log('Regular email notification sent successfully');
+              } else {
+                console.log('Recipient is NOT a silent signup user and message is not urgent, skipping email');
+              }
             } else {
-              console.log('Recipient is NOT a silent signup user or not found, skipping email');
+              console.log('Recipient not found, skipping email');
             }
           }).catch(error => {
             console.error('Error in notification promise:', error);
@@ -423,7 +449,7 @@ export class ChatService {
           
           notificationPromises.push(notificationPromise);
         } else {
-          console.log('Participant is viewing conversation, skipping notification');
+          console.log('Participant is viewing conversation, skipping notification and email');
         }
       }
     });

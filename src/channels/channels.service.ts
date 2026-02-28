@@ -55,16 +55,18 @@ export class ChannelsService {
       .sort({ createdAt: -1 })
       .exec();
 
-    return channels.map(channel => ({
-      id: channel._id,
-      title: channel.title,
-      subtitle: channel.subtitle,
-      avatar: channel.avatar,
-      subscribersCount: channel.subscribersCount,
-      isOwner: userId ? channel.owner._id.toString() === userId : false,
-      isSubscribed: userId ? channel.subscribers.some(sub => sub.toString() === userId) : false,
-      owner: channel.owner,
-    }));
+    return channels
+      .filter(channel => channel.owner !== null) // Filter out channels with deleted owners
+      .map(channel => ({
+        id: channel._id,
+        title: channel.title,
+        subtitle: channel.subtitle,
+        avatar: channel.avatar,
+        subscribersCount: channel.subscribersCount,
+        isOwner: userId ? channel.owner._id.toString() === userId : false,
+        isSubscribed: userId ? channel.subscribers.some(sub => sub.toString() === userId) : false,
+        owner: channel.owner,
+      }));
   }
 
   async getMyChannels(userId: string) {

@@ -13,6 +13,7 @@ import { ChannelsModule } from './channels/channels.module';
 import { StatusModule } from './status/status.module';
 import { SupportModule } from './support/support.module';
 import { ChatModule } from './chat/chat.module';
+import { AIModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { ChatModule } from './chat/chat.module';
     StatusModule,
     SupportModule,
     ChatModule,
+    AIModule,
   ],
   controllers: [AppController],
   providers: [AppService],
