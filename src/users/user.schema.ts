@@ -25,6 +25,9 @@ export class User extends Document {
   verificationCode: string;
 
   @Prop()
+  verificationToken: string;
+
+  @Prop()
   verificationCodeExpires: Date;
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
@@ -47,6 +50,33 @@ export class User extends Document {
 
   @Prop()
   silentSignupReferrer: Types.ObjectId; // The user whose profile they were viewing
+
+  @Prop({ type: [{ 
+    recipientId: { type: Types.ObjectId, ref: 'User' },
+    content: String,
+    createdAt: { type: Date, default: Date.now }
+  }], default: [] })
+  pendingMessages: Array<{
+    recipientId: Types.ObjectId;
+    content: string;
+    createdAt: Date;
+  }>;
+
+  @Prop({ type: {
+    profileUserId: { type: Types.ObjectId, ref: 'User' },
+    action: String, // 'follow', 'followers', 'following'
+    profileUsername: String,
+    createdAt: { type: Date, default: Date.now }
+  } })
+  pendingProfileAction?: {
+    profileUserId: Types.ObjectId;
+    action: 'follow' | 'followers' | 'following';
+    profileUsername: string;
+    createdAt: Date;
+  };
+
+  @Prop({ default: Date.now })
+  lastActiveAt: Date;
 
   createdAt?: Date;
   updatedAt?: Date;

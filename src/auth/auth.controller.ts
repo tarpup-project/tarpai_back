@@ -63,4 +63,53 @@ export class AuthController {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
     res.redirect(`${frontendUrl}/auth/google/callback?token=${result.token}&user=${encodeURIComponent(JSON.stringify(result.user))}`);
   }
+  @Post('create-pending-user')
+  async createPendingUser(
+    @Body() body: {
+      name: string;
+      email: string;
+      recipientId: string;
+      messageContent: string;
+    },
+  ) {
+    return this.authService.createPendingUser(
+      body.name,
+      body.email,
+      body.recipientId,
+      body.messageContent
+    );
+  }
+
+  @Post('verify-and-send-messages')
+  async verifyAndSendMessages(@Body() body: { email: string; code: string }) {
+    return this.authService.verifyEmailAndSendPendingMessages(body.email, body.code);
+  }
+  @Post('verify-chat-token')
+  async verifyChatToken(@Body() body: { token: string; recipientId: string }) {
+    return this.authService.verifyEmailWithToken(body.token, body.recipientId);
+  }
+
+  @Post('create-pending-profile-user')
+  async createPendingProfileUser(
+    @Body() body: {
+      name: string;
+      email: string;
+      profileUserId: string;
+      action: 'follow' | 'followers' | 'following';
+      profileUsername: string;
+    },
+  ) {
+    return this.authService.createPendingProfileUser(
+      body.name,
+      body.email,
+      body.profileUserId,
+      body.action,
+      body.profileUsername
+    );
+  }
+
+  @Post('verify-profile-token')
+  async verifyProfileToken(@Body() body: { token: string; profileUserId: string }) {
+    return this.authService.verifyProfileAction(body.token, body.profileUserId);
+  }
 }

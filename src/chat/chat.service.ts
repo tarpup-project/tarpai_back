@@ -38,18 +38,35 @@ export class ChatService {
     }
 
     // Check if users follow each other or if one follows the other
-    const user = await this.userModel.findById(userId);
-    const participant = await this.userModel.findById(participantId);
+    // Add a small retry mechanism to handle race conditions
+    let user, participant;
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries) {
+      user = await this.userModel.findById(userId);
+      participant = await this.userModel.findById(participantId);
 
-    if (!user || !participant) {
-      throw new NotFoundException('User not found');
-    }
+      if (!user || !participant) {
+        throw new NotFoundException('User not found');
+      }
 
-    const userFollowsParticipant = user.following.some(id => id.toString() === participantId);
-    const participantFollowsUser = participant.following.some(id => id.toString() === userId);
+      const userFollowsParticipant = user.following.some(id => id.toString() === participantId);
+      const participantFollowsUser = participant.following.some(id => id.toString() === userId);
 
-    if (!userFollowsParticipant && !participantFollowsUser) {
-      throw new ForbiddenException('You can only chat with people you follow or who follow you');
+      if (userFollowsParticipant || participantFollowsUser) {
+        // Follow relationship found, proceed with conversation creation
+        break;
+      }
+
+      // If no follow relationship found and this is not the last retry, wait and try again
+      if (retryCount < maxRetries - 1) {
+        console.log(`Follow relationship not found, retrying... (${retryCount + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, 200)); // Wait 200ms before retry
+        retryCount++;
+      } else {
+        throw new ForbiddenException('You can only chat with people you follow or who follow you');
+      }
     }
 
     const conversation = new this.conversationModel({
@@ -505,6 +522,65 @@ export class ChatService {
           this.chatGateway.server.to(socketId).emit('conversation_updated', participantConversation);
         }
       });
+    }
+
+    // Check for auto-reply after message is sent (only for text messages in direct conversations)
+    if (type === 'text' && content && content.trim().length > 0 && !conversation.isGroup) {
+      // Find the recipient (the other participant)
+      const recipientId = conversation.participants.find(p => p.toString() !== senderId);
+      if (recipientId) {
+        const recipient = await this.userModel.findById(recipientId);
+        if (recipient) {
+          // Check if recipient is currently viewing this conversation
+          const isViewingConversation = this.chatGateway.isUserViewingConversation(
+            recipientId.toString(),
+            conversationId,
+          );
+          
+          console.log('Auto-reply check:', {
+            recipientId: recipientId.toString(),
+            isViewingConversation,
+            recipientName: recipient.displayName || recipient.name
+          });
+
+          // If recipient is not viewing the conversation, check for auto-reply
+          if (!isViewingConversation) {
+            // Check if message should get an auto-reply
+            const shouldAutoReply = await this.aiService.shouldAutoReply(content);
+            
+            if (shouldAutoReply) {
+              console.log('Generating auto-reply for user not viewing conversation');
+              
+              // Generate auto-reply
+              const autoReplyContent = await this.aiService.generateAutoReply(
+                content,
+                recipient.displayName || recipient.name,
+                senderName
+              );
+
+              // Send auto-reply after a short delay (2-5 seconds to seem natural)
+              const delay = 2000 + Math.random() * 3000; // 2-5 seconds
+              setTimeout(async () => {
+                try {
+                  await this.sendMessage(
+                    conversationId,
+                    recipientId.toString(),
+                    autoReplyContent,
+                    'text'
+                  );
+                  console.log('Auto-reply sent successfully');
+                } catch (error) {
+                  console.error('Failed to send auto-reply:', error);
+                }
+              }, delay);
+            } else {
+              console.log('Message does not warrant auto-reply');
+            }
+          } else {
+            console.log('Recipient is viewing conversation, skipping auto-reply');
+          }
+        }
+      }
     }
 
     return messageResponse;

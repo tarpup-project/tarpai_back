@@ -374,4 +374,9 @@ export class UsersService {
 
     return { message: 'Link deleted successfully' };
   }
+  async updateLastActive(userId: string): Promise<void> {
+    await this.userModel.findByIdAndUpdate(userId, {
+      lastActiveAt: new Date(),
+    });
+  }
 }

@@ -138,6 +138,11 @@ export class UsersController {
     const qrCode = await this.usersService.generateProfileQRCode(req.user.id);
     return { qrCode };
   }
+  @Post('activity/update')
+  @UseGuards(AuthGuard('jwt'))
+  async updateActivity(@Req() req) {
+    return this.usersService.updateLastActive(req.user.id);
+  }
 
   @Post()
   create(@Body() createUserDto: any) {

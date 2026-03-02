@@ -272,4 +272,228 @@ export class EmailService {
       throw error;
     }
   }
+  async sendChatVerificationEmail(email: string, code: string, recipientName: string, senderName: string, messageContent: string) {
+    if (!this.transporter) {
+      console.log('Email not configured. VERIFICATION CODE:', code);
+      return;
+    }
+
+    const backendUrl = this.configService.get<string>('BACKEND_URL') || 'http://localhost:3000';
+    const googleAuthUrl = `${backendUrl}/auth/google`;
+
+    const mailOptions = {
+      from: this.configService.get<string>('EMAIL_FROM') || 'noreply@tarpai.com',
+      to: email,
+      subject: `${senderName} wants to chat with you on TarpUp - Verify your email`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0;">TarpUp</h1>
+          </div>
+
+          <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+            <h2 style="color: #333; margin-top: 0;">Hi ${recipientName}! 👋</h2>
+
+            <p style="color: #666; font-size: 16px; line-height: 1.6;">
+              <strong>${senderName}</strong> wants to send you a message:
+            </p>
+
+            <div style="background: white; padding: 20px; border-left: 4px solid #667eea; margin: 20px 0; border-radius: 5px;">
+              <p style="color: #333; margin: 0; font-style: italic;">
+                "${messageContent.length > 150 ? messageContent.substring(0, 150) + '...' : messageContent}"
+              </p>
+            </div>
+
+            <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ffc107;">
+              <p style="color: #856404; margin: 0; font-size: 14px;">
+                📧 Please verify your email to receive this message and start chatting!
+              </p>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <p style="color: #666; margin-bottom: 15px;">Your verification code is:</p>
+              <h1 style="background: #f4f4f4; padding: 20px; text-align: center; letter-spacing: 5px; margin: 20px 0; border-radius: 5px;">
+                ${code}
+              </h1>
+              <p style="color: #999; font-size: 12px;">This code will expire in 10 minutes.</p>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+
+            <div style="background: #fff; padding: 20px; border-radius: 5px; text-align: center;">
+              <p style="color: #666; margin-bottom: 15px;">
+                Or verify instantly with Google and start chatting right away!
+              </p>
+              <a href="${googleAuthUrl}" style="background: white; color: #333; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; border: 2px solid #ddd; font-weight: 500;">
+                <img src="https://www.google.com/favicon.ico" alt="Google" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 8px;">
+                Verify with Google
+              </a>
+            </div>
+
+            <p style="color: #999; font-size: 12px; text-align: center; margin-top: 30px;">
+              You're receiving this because someone wants to chat with you on TarpUp.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      console.log('Chat verification email sent to:', email);
+    } catch (error) {
+      console.error('Error sending chat verification email:', error);
+      console.log('VERIFICATION CODE:', code);
+    }
+  }
+  async sendChatVerificationLink(
+    email: string,
+    token: string,
+    recipientId: string,
+    senderName: string,
+    recipientName: string,
+    messageContent: string
+  ) {
+    if (!this.transporter) {
+      console.log('Email not configured. VERIFICATION TOKEN:', token);
+      return;
+    }
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+    const verificationUrl = `${frontendUrl}/verify-chat?token=${token}&recipientId=${recipientId}`;
+
+    const mailOptions = {
+      from: this.configService.get<string>('EMAIL_FROM') || 'noreply@tarpai.com',
+      to: email,
+      subject: `${recipientName} wants to chat with you on TarpUp - Click to verify`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0;">TarpUp</h1>
+          </div>
+
+          <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+            <h2 style="color: #333; margin-top: 0;">Hi ${senderName}! 👋</h2>
+
+            <p style="color: #666; font-size: 16px; line-height: 1.6;">
+              <strong>${recipientName}</strong> wants to receive your message:
+            </p>
+
+            <div style="background: white; padding: 20px; border-left: 4px solid #667eea; margin: 20px 0; border-radius: 5px;">
+              <p style="color: #333; margin: 0; font-style: italic;">
+                "${messageContent.length > 150 ? messageContent.substring(0, 150) + '...' : messageContent}"
+              </p>
+            </div>
+
+            <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ffc107;">
+              <p style="color: #856404; margin: 0; font-size: 14px;">
+                📧 Click the button below to verify your email and send your message!
+              </p>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${verificationUrl}" style="background: #667eea; color: white; padding: 15px 40px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold; font-size: 16px;">
+                Verify Email & Send Message
+              </a>
+            </div>
+
+            <p style="color: #999; font-size: 12px; text-align: center; margin-top: 20px;">
+              This link will expire in 24 hours.
+            </p>
+
+            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+
+            <p style="color: #999; font-size: 12px; text-align: center;">
+              You're receiving this because someone wants to chat with you on TarpUp.<br>
+              If you didn't request this, you can safely ignore this email.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      console.log('Chat verification link sent to:', email);
+    } catch (error) {
+      console.error('Error sending chat verification link:', error);
+      console.log('VERIFICATION TOKEN:', token);
+    }
+  }
+
+  async sendProfileVerificationLink(
+    email: string,
+    token: string,
+    profileUserId: string,
+    senderName: string,
+    profileName: string,
+    action: 'follow' | 'followers' | 'following',
+    profileUsername: string
+  ) {
+    if (!this.transporter) {
+      console.log('Email not configured. VERIFICATION TOKEN:', token);
+      return;
+    }
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+    const verificationUrl = `${frontendUrl}/verify-profile?token=${token}&profileUserId=${profileUserId}&action=${action}&profileUsername=${profileUsername}`;
+
+    const actionText = {
+      follow: 'follow',
+      followers: 'view followers of',
+      following: 'view following of'
+    };
+
+    const mailOptions = {
+      from: this.configService.get<string>('EMAIL_FROM') || 'noreply@tarpai.com',
+      to: email,
+      subject: `Complete your action on ${profileName}'s profile - TarpUp`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0;">TarpUp</h1>
+          </div>
+
+          <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+            <h2 style="color: #333; margin-top: 0;">Hi ${senderName}! 👋</h2>
+
+            <p style="color: #666; font-size: 16px; line-height: 1.6;">
+              You wanted to <strong>${actionText[action]} ${profileName}</strong> on TarpUp.
+            </p>
+
+            <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ffc107;">
+              <p style="color: #856404; margin: 0; font-size: 14px;">
+                📧 Click the button below to verify your email and complete this action!
+              </p>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${verificationUrl}" style="background: #667eea; color: white; padding: 15px 40px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold; font-size: 16px;">
+                Verify Email & ${action === 'follow' ? 'Follow' : action === 'followers' ? 'View Followers' : 'View Following'}
+              </a>
+            </div>
+
+            <p style="color: #999; font-size: 12px; text-align: center; margin-top: 20px;">
+              This link will expire in 24 hours.
+            </p>
+
+            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+
+            <p style="color: #999; font-size: 12px; text-align: center;">
+              You're receiving this because you requested to ${actionText[action]} ${profileName} on TarpUp.<br>
+              If you didn't request this, you can safely ignore this email.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      console.log('Profile verification link sent to:', email);
+    } catch (error) {
+      console.error('Error sending profile verification link:', error);
+      console.log('VERIFICATION TOKEN:', token);
+    }
+  }
 }
