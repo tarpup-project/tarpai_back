@@ -9,6 +9,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { ChatGateway } from './chat.gateway';
 import { EmailService } from '../auth/email.service';
 import { AiService } from './ai.service';
+import { LinkPreviewService } from './link-preview.service';
 
 @Injectable()
 export class ChatService {
@@ -22,6 +23,7 @@ export class ChatService {
     private chatGateway: ChatGateway,
     private emailService: EmailService,
     private aiService: AiService,
+    private linkPreviewService: LinkPreviewService,
   ) {}
 
   async createConversation(userId: string, participantId: string) {
@@ -283,6 +285,7 @@ export class ChatService {
         fileUrl: msg.fileUrl,
         fileName: msg.fileName,
         sender: msg.sender,
+        linkPreview: msg.linkPreview,
         replyTo: msg.replyTo ? {
           id: (msg.replyTo as any)._id,
           content: (msg.replyTo as any).content,
@@ -341,6 +344,15 @@ export class ChatService {
       fileName = file.originalname;
     }
 
+    // Extract and fetch link preview if message contains a URL
+    let linkPreview: any = null;
+    if (type === 'text' && content) {
+      const url = this.linkPreviewService.extractUrlFromMessage(content);
+      if (url) {
+        linkPreview = await this.linkPreviewService.fetchLinkPreview(url);
+      }
+    }
+
     const messageData: any = {
       conversation: new Types.ObjectId(conversationId),
       sender: new Types.ObjectId(senderId),
@@ -350,6 +362,11 @@ export class ChatService {
       fileName,
       readBy: [new Types.ObjectId(senderId)], // Sender has read their own message
     };
+
+    // Add link preview if available
+    if (linkPreview) {
+      messageData.linkPreview = linkPreview;
+    }
 
     // Add reply reference if provided
     if (replyToId) {
@@ -496,6 +513,7 @@ export class ChatService {
       fileUrl: populatedMessage.fileUrl,
       fileName: populatedMessage.fileName,
       sender: populatedMessage.sender,
+      linkPreview: populatedMessage.linkPreview,
       replyTo: populatedMessage.replyTo ? {
         id: (populatedMessage.replyTo as any)._id,
         content: (populatedMessage.replyTo as any).content,

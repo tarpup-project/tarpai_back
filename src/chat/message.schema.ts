@@ -27,6 +27,16 @@ export class Message extends Document {
   @Prop({ type: Types.ObjectId, ref: 'Message' })
   replyTo?: Types.ObjectId;
 
+  @Prop({ type: Object })
+  linkPreview?: {
+    url: string;
+    title?: string;
+    description?: string;
+    image?: string;
+    favicon?: string;
+    siteName?: string;
+  };
+
   @Prop({ default: false })
   isEdited: boolean;
 
