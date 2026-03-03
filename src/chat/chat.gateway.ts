@@ -28,6 +28,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private connectedUsers = new Map<string, string>(); // userId -> socketId
   private activeConversations = new Map<string, Set<string>>(); // conversationId -> Set of userIds viewing it
   private usersOnChatsPage = new Map<string, number>(); // userId -> timestamp when they registered on chats page
+  private conversationLeftTimestamps = new Map<string, number>(); // `${userId}_${conversationId}` -> timestamp when user left
 
   constructor(
     @Inject(forwardRef(() => ChatService))
@@ -182,6 +183,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     client.join(`conversation_${data.conversationId}`);
     
+    // Clear the left timestamp when user rejoins
+    const key = `${client.userId}_${data.conversationId}`;
+    this.conversationLeftTimestamps.delete(key);
+    
     // Track that this user is viewing this conversation
     if (!this.activeConversations.has(data.conversationId)) {
       this.activeConversations.set(data.conversationId, new Set());
@@ -224,6 +229,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     client.leave(`conversation_${data.conversationId}`);
+    
+    // Track when user left this conversation
+    const key = `${client.userId}_${data.conversationId}`;
+    this.conversationLeftTimestamps.set(key, Date.now());
     
     // Remove user from active viewers
     const viewers = this.activeConversations.get(data.conversationId);
@@ -305,6 +314,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   isUserViewingConversation(userId: string, conversationId: string): boolean {
     const viewers = this.activeConversations.get(conversationId);
     return viewers ? viewers.has(userId) : false;
+  }
+
+  // Method to check if user has been inactive for more than an hour
+  hasUserBeenInactiveForAnHour(userId: string, conversationId: string): boolean {
+    const key = `${userId}_${conversationId}`;
+    const leftTimestamp = this.conversationLeftTimestamps.get(key);
+    
+    if (!leftTimestamp) {
+      // No record of leaving, assume they haven't been inactive
+      return false;
+    }
+    
+    const now = Date.now();
+    const oneHourInMs = 60 * 60 * 1000; // 1 hour in milliseconds
+    const timeSinceLeft = now - leftTimestamp;
+    
+    return timeSinceLeft >= oneHourInMs;
   }
 
   // Method to check if user is active (for "Active now" display - includes chats page)
