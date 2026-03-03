@@ -569,20 +569,24 @@ export class ChatService {
               conversationId
             );
             
-            console.log('Auto-reply check:', {
-              recipientId: recipientId.toString(),
-              isViewingConversation,
-              hasBeenInactiveForAnHour,
-              recipientName: recipient.displayName || recipient.name
-            });
+            console.log('=== AUTO-REPLY CHECK ===');
+            console.log('Recipient ID:', recipientId.toString());
+            console.log('Conversation ID:', conversationId);
+            console.log('Is viewing conversation:', isViewingConversation);
+            console.log('Has been inactive for threshold:', hasBeenInactiveForAnHour);
+            console.log('Recipient name:', recipient.displayName || recipient.name);
             
-            // Only send auto-reply if user is not viewing AND has been inactive for an hour
+            // Only send auto-reply if user is not viewing AND has been inactive for threshold time
             if (hasBeenInactiveForAnHour) {
+              console.log('User has been inactive long enough, checking if message warrants auto-reply...');
+              
               // Check if message should get an auto-reply
               const shouldAutoReply = await this.aiService.shouldAutoReply(content);
               
+              console.log('Should auto-reply:', shouldAutoReply);
+              
               if (shouldAutoReply) {
-                console.log('Generating auto-reply for user inactive for over an hour');
+                console.log('Generating auto-reply for user inactive for over threshold time');
                 
                 // Generate auto-reply
                 const autoReplyContent = await this.aiService.generateAutoReply(
@@ -591,8 +595,12 @@ export class ChatService {
                   senderName
                 );
 
+                console.log('Auto-reply generated:', autoReplyContent);
+
                 // Send auto-reply after a short delay (2-5 seconds to seem natural)
                 const delay = 2000 + Math.random() * 3000; // 2-5 seconds
+                console.log(`Sending auto-reply in ${Math.round(delay)}ms...`);
+                
                 setTimeout(async () => {
                   try {
                     await this.sendMessage(
@@ -601,16 +609,16 @@ export class ChatService {
                       autoReplyContent,
                       'text'
                     );
-                    console.log('Auto-reply sent successfully');
+                    console.log('✓ Auto-reply sent successfully');
                   } catch (error) {
-                    console.error('Failed to send auto-reply:', error);
+                    console.error('✗ Failed to send auto-reply:', error);
                   }
                 }, delay);
               } else {
                 console.log('Message does not warrant auto-reply');
               }
             } else {
-              console.log('User has not been inactive for an hour yet, skipping auto-reply');
+              console.log('User has not been inactive for threshold time yet, skipping auto-reply');
             }
           } else {
             console.log('Recipient is viewing conversation, skipping auto-reply');

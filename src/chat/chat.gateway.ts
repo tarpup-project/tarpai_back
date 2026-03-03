@@ -321,14 +321,28 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const key = `${userId}_${conversationId}`;
     const leftTimestamp = this.conversationLeftTimestamps.get(key);
     
+    console.log('=== INACTIVITY CHECK ===');
+    console.log('User ID:', userId);
+    console.log('Conversation ID:', conversationId);
+    console.log('Key:', key);
+    console.log('Left timestamp:', leftTimestamp);
+    
     if (!leftTimestamp) {
       // No record of leaving, assume they haven't been inactive
+      console.log('No left timestamp found - user has not left conversation yet');
       return false;
     }
     
     const now = Date.now();
-    const oneHourInMs = 60 * 60 * 1000; // 1 hour in milliseconds
+    // const twoMinutesInMs = 2 * 60 * 1000; // 2 minutes in milliseconds (for testing)
+    const oneHourInMs = 60 * 60 * 1000; // 1 hour in milliseconds (production)
     const timeSinceLeft = now - leftTimestamp;
+    
+    console.log('Current time:', now);
+    console.log('Time since left (ms):', timeSinceLeft);
+    console.log('Time since left (minutes):', Math.round(timeSinceLeft / 60000));
+    console.log('Threshold (ms):', oneHourInMs);
+    console.log('Has been inactive long enough:', timeSinceLeft >= oneHourInMs);
     
     return timeSinceLeft >= oneHourInMs;
   }
