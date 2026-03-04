@@ -78,6 +78,15 @@ export class User extends Document {
   @Prop({ default: Date.now })
   lastActiveAt: Date;
 
+  @Prop()
+  googleCalendarAccessToken: string;
+
+  @Prop()
+  googleCalendarRefreshToken: string;
+
+  @Prop()
+  googleCalendarTokenExpiry: Date;
+
   createdAt?: Date;
   updatedAt?: Date;
 }

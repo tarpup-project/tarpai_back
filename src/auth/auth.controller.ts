@@ -112,4 +112,17 @@ export class AuthController {
   async verifyProfileToken(@Body() body: { token: string; profileUserId: string }) {
     return this.authService.verifyProfileAction(body.token, body.profileUserId);
   }
+
+  @Post('google/calendar')
+  @UseGuards(AuthGuard('jwt'))
+  async connectGoogleCalendar(
+    @Body() body: { code: string },
+    @Req() req: any,
+  ) {
+    // Try different possible user ID fields
+    const userId = req.user?.userId || req.user?.id || req.user?._id;
+    console.log('Calendar connect - req.user:', req.user);
+    console.log('Calendar connect - userId:', userId);
+    return this.authService.connectGoogleCalendar(body.code, userId);
+  }
 }

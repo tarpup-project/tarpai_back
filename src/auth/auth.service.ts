@@ -535,4 +535,53 @@ export class AuthService {
       message: 'Email verified successfully! Completing your action...',
     };
   }
+
+  async connectGoogleCalendar(code: string, userId: string) {
+    console.log('connectGoogleCalendar called with userId:', userId);
+    
+    if (!userId) {
+      throw new BadRequestException('User not authenticated');
+    }
+
+    try {
+      const axios = require('axios');
+      
+      console.log('Exchanging code for tokens...');
+      
+      // Exchange authorization code for tokens using calendar-specific credentials
+      const tokenResponse = await axios.post('https://oauth2.googleapis.com/token', {
+        code,
+        client_id: process.env.GOOGLE_CALENDAR_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CALENDAR_CLIENT_SECRET,
+        redirect_uri: `${process.env.FRONTEND_URL}/auth/google/calendar/callback`,
+        grant_type: 'authorization_code',
+      });
+
+      const { access_token, refresh_token, expires_in } = tokenResponse.data;
+      
+      console.log('Tokens received, saving to user:', userId);
+
+      // Store tokens in user document
+      const updatedUser = await this.userModel.findByIdAndUpdate(
+        userId,
+        {
+          googleCalendarAccessToken: access_token,
+          googleCalendarRefreshToken: refresh_token,
+          googleCalendarTokenExpiry: new Date(Date.now() + expires_in * 1000),
+        },
+        { new: true }
+      );
+
+      console.log('Calendar tokens saved successfully for user:', userId);
+      console.log('Has access token:', !!updatedUser.googleCalendarAccessToken);
+
+      return {
+        message: 'Calendar connected successfully',
+        success: true,
+      };
+    } catch (error) {
+      console.error('Error connecting Google Calendar:', error.response?.data || error.message);
+      throw new BadRequestException('Failed to connect Google Calendar: ' + (error.response?.data?.error_description || error.message));
+    }
+  }
 }
