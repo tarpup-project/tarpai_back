@@ -15,6 +15,9 @@ export class Conversation extends Document {
   @Prop({ type: Map, of: Number, default: {} })
   unreadCount: Map<string, number>; // userId -> unread count
 
+  @Prop({ type: Map, of: Date })
+  leftAt: Map<string, Date>; // userId -> timestamp when they left the conversation
+
   @Prop({ default: true })
   isActive: boolean;
 

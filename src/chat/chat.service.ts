@@ -563,8 +563,8 @@ export class ChatService {
 
           // If recipient is not viewing the conversation, check for auto-reply
           if (!isViewingConversation) {
-            // Check if user has been inactive for more than an hour
-            const hasBeenInactiveForAnHour = this.chatGateway.hasUserBeenInactiveForAnHour(
+            // Check if user has been inactive for more than 30 minutes
+            const hasBeenInactiveForAnHour = await this.chatGateway.hasUserBeenInactiveForAnHour(
               recipientId.toString(),
               conversationId
             );

@@ -9,8 +9,11 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Inject, forwardRef } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import { JwtService } from '@nestjs/jwt';
 import { ChatService } from './chat.service';
+import { Conversation } from './conversation.schema';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -34,6 +37,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @Inject(forwardRef(() => ChatService))
     private chatService: ChatService,
     private jwtService: JwtService,
+    @InjectModel(Conversation.name) private conversationModel: Model<Conversation>,
   ) {
     // Clean up stale chats page entries every 60 seconds
     setInterval(() => {
@@ -183,9 +187,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     client.join(`conversation_${data.conversationId}`);
     
-    // Clear the left timestamp when user rejoins
+    // Clear the left timestamp when user rejoins (both memory and database)
     const key = `${client.userId}_${data.conversationId}`;
     this.conversationLeftTimestamps.delete(key);
+    
+    // Clear from database as well
+    try {
+      await this.conversationModel.findByIdAndUpdate(
+        data.conversationId,
+        {
+          $unset: {
+            [`leftAt.${client.userId}`]: '',
+          },
+        },
+      );
+    } catch (error) {
+      console.error('Failed to clear leftAt timestamp:', error);
+    }
     
     // Track that this user is viewing this conversation
     if (!this.activeConversations.has(data.conversationId)) {
@@ -230,9 +248,24 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     client.leave(`conversation_${data.conversationId}`);
     
-    // Track when user left this conversation
+    // Track when user left this conversation in memory
     const key = `${client.userId}_${data.conversationId}`;
-    this.conversationLeftTimestamps.set(key, Date.now());
+    const leftTimestamp = Date.now();
+    this.conversationLeftTimestamps.set(key, leftTimestamp);
+    
+    // Save leftAt timestamp to database for reliability
+    try {
+      await this.conversationModel.findByIdAndUpdate(
+        data.conversationId,
+        {
+          $set: {
+            [`leftAt.${client.userId}`]: new Date(leftTimestamp),
+          },
+        },
+      );
+    } catch (error) {
+      console.error('Failed to save leftAt timestamp:', error);
+    }
     
     // Remove user from active viewers
     const viewers = this.activeConversations.get(data.conversationId);
@@ -316,35 +349,80 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return viewers ? viewers.has(userId) : false;
   }
 
-  // Method to check if user has been inactive for more than an hour
-  hasUserBeenInactiveForAnHour(userId: string, conversationId: string): boolean {
+  // Method to check if user has been inactive for more than 30 minutes
+  async hasUserBeenInactiveForAnHour(userId: string, conversationId: string): Promise<boolean> {
     const key = `${userId}_${conversationId}`;
-    const leftTimestamp = this.conversationLeftTimestamps.get(key);
     
     console.log('=== INACTIVITY CHECK ===');
     console.log('User ID:', userId);
     console.log('Conversation ID:', conversationId);
     console.log('Key:', key);
-    console.log('Left timestamp:', leftTimestamp);
     
+    // First check memory
+    let leftTimestamp = this.conversationLeftTimestamps.get(key);
+    console.log('Memory leftTimestamp:', leftTimestamp);
+    
+    // If not in memory, check database
     if (!leftTimestamp) {
-      // No record of leaving, assume they haven't been inactive
-      console.log('No left timestamp found - user has not left conversation yet');
-      return false;
+      try {
+        const conversation = await this.conversationModel.findById(conversationId);
+        console.log('Conversation found:', !!conversation);
+        console.log('Conversation leftAt field exists:', !!conversation?.leftAt);
+        
+        if (conversation && conversation.leftAt) {
+          console.log('leftAt Map keys:', Array.from(conversation.leftAt.keys()));
+          const leftAtDate = conversation.leftAt.get(userId);
+          console.log('leftAt value for user:', leftAtDate);
+          
+          if (leftAtDate) {
+            leftTimestamp = leftAtDate.getTime();
+            // Cache it in memory
+            this.conversationLeftTimestamps.set(key, leftTimestamp);
+            console.log('Loaded leftTimestamp from database:', leftTimestamp);
+          }
+        } else {
+          console.log('No leftAt data in conversation document');
+        }
+      } catch (error) {
+        console.error('Failed to fetch leftAt from database:', error);
+      }
+    }
+    
+    console.log('Final left timestamp:', leftTimestamp);
+    
+    // If no timestamp found, assume they just left (start counting from now)
+    if (!leftTimestamp) {
+      leftTimestamp = Date.now();
+      // Save this initial timestamp
+      this.conversationLeftTimestamps.set(key, leftTimestamp);
+      
+      // Also save to database
+      try {
+        await this.conversationModel.findByIdAndUpdate(
+          conversationId,
+          {
+            $set: {
+              [`leftAt.${userId}`]: new Date(leftTimestamp),
+            },
+          },
+        );
+        console.log('Initialized leftAt timestamp to current time');
+      } catch (error) {
+        console.error('Failed to initialize leftAt timestamp:', error);
+      }
     }
     
     const now = Date.now();
-    // const twoMinutesInMs = 2 * 60 * 1000; // 2 minutes in milliseconds (for testing)
-    const oneHourInMs = 60 * 60 * 1000; // 1 hour in milliseconds (production)
+    const thirtyMinutesInMs = 30 * 60 * 1000; // 30 minutes in milliseconds
     const timeSinceLeft = now - leftTimestamp;
     
     console.log('Current time:', now);
     console.log('Time since left (ms):', timeSinceLeft);
     console.log('Time since left (minutes):', Math.round(timeSinceLeft / 60000));
-    console.log('Threshold (ms):', oneHourInMs);
-    console.log('Has been inactive long enough:', timeSinceLeft >= oneHourInMs);
+    console.log('Threshold (minutes): 30');
+    console.log('Has been inactive long enough:', timeSinceLeft >= thirtyMinutesInMs);
     
-    return timeSinceLeft >= oneHourInMs;
+    return timeSinceLeft >= thirtyMinutesInMs;
   }
 
   // Method to check if user is active (for "Active now" display - includes chats page)
