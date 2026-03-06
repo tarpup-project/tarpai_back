@@ -5,6 +5,7 @@ import { BroadcastsService } from './broadcasts.service';
 import { Broadcast, BroadcastSchema } from './broadcast.schema';
 import { User, UserSchema } from '../users/user.schema';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       { name: User.name, schema: UserSchema },
     ]),
     NotificationsModule,
+    AuthModule,
   ],
   controllers: [BroadcastsController],
   providers: [BroadcastsService],

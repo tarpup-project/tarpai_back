@@ -2,11 +2,15 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req,
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ChatService } from './chat.service';
+import { LinkPreviewService } from './link-preview.service';
 
 @Controller('chat')
 @UseGuards(JwtAuthGuard)
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly linkPreviewService: LinkPreviewService,
+  ) {}
 
   // Get all conversations for user
   @Get('conversations')
@@ -123,5 +127,14 @@ export class ChatController {
     @Req() req,
   ) {
     return this.chatService.setChatsPageStatus(req.user.id, body.isOnChatsPage);
+  }
+
+  // Fetch link preview metadata
+  @Get('link-preview')
+  async getLinkPreview(@Query('url') url: string) {
+    if (!url) {
+      return { error: 'URL parameter is required' };
+    }
+    return this.linkPreviewService.fetchLinkPreview(url);
   }
 }

@@ -496,4 +496,89 @@ export class EmailService {
       console.log('VERIFICATION TOKEN:', token);
     }
   }
+
+  async sendBroadcastNotification(
+    recipientEmail: string,
+    recipientName: string,
+    senderName: string,
+    senderUsername: string,
+    broadcastMessage: string,
+  ) {
+    console.log('=== sendBroadcastNotification called ===');
+    console.log('Recipient Email:', recipientEmail);
+    console.log('Recipient Name:', recipientName);
+    console.log('Sender Name:', senderName);
+    console.log('Broadcast Message:', broadcastMessage);
+    
+    if (!this.transporter) {
+      console.log('Email not configured. Broadcast notification not sent.');
+      return;
+    }
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+    const broadcastsUrl = `${frontendUrl}/chats?tab=broadcasts`;
+    const senderProfileUrl = `${frontendUrl}/${senderUsername}`;
+
+    const emailFrom = this.configService.get<string>('EMAIL_FROM') || 'noreply@tarpai.com';
+    
+    const mailOptions = {
+      from: emailFrom,
+      to: recipientEmail,
+      subject: `📢 ${senderName} sent you a broadcast on TarpUp`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0;">📢 TarpUp Broadcast</h1>
+          </div>
+          
+          <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+            <h2 style="color: #333; margin-top: 0;">Hi ${recipientName}! 👋</h2>
+            
+            <p style="color: #666; font-size: 16px; line-height: 1.6;">
+              <strong>${senderName}</strong> sent a broadcast message to all followers:
+            </p>
+            
+            <div style="background: white; padding: 20px; border-left: 4px solid #667eea; margin: 20px 0; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+              <p style="color: #333; margin: 0; font-size: 15px; line-height: 1.6;">
+                ${broadcastMessage.length > 300 ? broadcastMessage.substring(0, 300) + '...' : broadcastMessage}
+              </p>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${broadcastsUrl}" style="background: #667eea; color: white; padding: 15px 40px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold; font-size: 16px;">
+                View All Broadcasts
+              </a>
+            </div>
+            
+            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+            
+            <div style="background: #fff; padding: 20px; border-radius: 5px; text-align: center;">
+              <p style="color: #666; margin-bottom: 15px;">
+                Want to see more from ${senderName}?
+              </p>
+              <a href="${senderProfileUrl}" style="background: white; color: #333; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; border: 2px solid #ddd; font-weight: 500;">
+                Visit @${senderUsername}'s Profile
+              </a>
+            </div>
+            
+            <p style="color: #999; font-size: 12px; text-align: center; margin-top: 30px;">
+              You're receiving this because you follow ${senderName} on TarpUp.<br>
+              Broadcasts are limited to 2 per year per user.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    console.log('Attempting to send broadcast notification email...');
+    
+    try {
+      const result = await this.transporter.sendMail(mailOptions);
+      console.log('Broadcast notification sent successfully to:', recipientEmail);
+      console.log('Email send result:', result);
+    } catch (error) {
+      console.error('Error sending broadcast notification:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+    }
+  }
 }

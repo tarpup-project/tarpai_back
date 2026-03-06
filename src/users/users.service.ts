@@ -374,6 +374,33 @@ export class UsersService {
 
     return { message: 'Link deleted successfully' };
   }
+
+  async getBroadcastCount(userId: string) {
+    const user = await this.userModel.findById(userId);
+    const now = new Date();
+    const BROADCAST_PERIOD_DAYS = 365; // 1 year
+    
+    // Check if broadcast period has expired and reset if needed
+    if (user.broadcastPeriodStart) {
+      const daysSinceStart = Math.floor((now.getTime() - user.broadcastPeriodStart.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // Reset count if period has passed
+      if (daysSinceStart >= BROADCAST_PERIOD_DAYS) {
+        console.log(`🔄 [getBroadcastCount] Resetting broadcast count for user ${userId}. Days since start: ${daysSinceStart}`);
+        user.yearlyBroadcastCount = 0;
+        user.broadcastPeriodStart = null;
+        await user.save();
+      }
+    }
+
+    return {
+      yearlyBroadcastCount: user.yearlyBroadcastCount || 0,
+      maxBroadcasts: 2,
+      remainingBroadcasts: 2 - (user.yearlyBroadcastCount || 0),
+      broadcastPeriodStart: user.broadcastPeriodStart,
+    };
+  }
+
   async updateLastActive(userId: string): Promise<void> {
     await this.userModel.findByIdAndUpdate(userId, {
       lastActiveAt: new Date(),

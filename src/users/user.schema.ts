@@ -87,6 +87,15 @@ export class User extends Document {
   @Prop()
   googleCalendarTokenExpiry: Date;
 
+  @Prop({ default: 0 })
+  yearlyBroadcastCount: number;
+
+  @Prop()
+  broadcastCountYear: number; // Track which year the count is for (deprecated - use broadcastPeriodStart)
+
+  @Prop()
+  broadcastPeriodStart: Date; // Track when the current broadcast period started
+
   createdAt?: Date;
   updatedAt?: Date;
 }

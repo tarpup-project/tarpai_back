@@ -14,7 +14,7 @@ export class StatusController {
   // Create status
   @Post()
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FilesInterceptor('images', 10)) // Allow up to 10 images
+  @UseInterceptors(FilesInterceptor('images', 7)) // Allow up to 7 images
   async createStatus(
     @Body() body: { content: string },
     @UploadedFiles() files: Express.Multer.File[],
@@ -131,7 +131,7 @@ export class StatusController {
   // Update status
   @Put(':id')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FilesInterceptor('images', 10)) // Allow up to 10 images
+  @UseInterceptors(FilesInterceptor('images', 7)) // Allow up to 7 images
   updateStatus(
     @Param('id') id: string,
     @Body() body: { content?: string },
@@ -162,7 +162,7 @@ export class StatusController {
   // Edit and repost status
   @Post(':id/edit-repost')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FilesInterceptor('images', 10))
+  @UseInterceptors(FilesInterceptor('images', 7))
   editAndRepost(
     @Param('id') id: string,
     @Body() body: { content: string },

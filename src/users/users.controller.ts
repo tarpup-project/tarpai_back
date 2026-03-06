@@ -29,6 +29,13 @@ export class UsersController {
     return this.usersService.searchUsers(query);
   }
 
+  // Broadcast count - Must come before :id route
+  @Get('broadcast-count')
+  @UseGuards(AuthGuard('jwt'))
+  async getBroadcastCount(@Req() req) {
+    return this.usersService.getBroadcastCount(req.user.id);
+  }
+
   @Post('links')
   @UseGuards(AuthGuard('jwt'))
   async addLink(
@@ -138,6 +145,7 @@ export class UsersController {
     const qrCode = await this.usersService.generateProfileQRCode(req.user.id);
     return { qrCode };
   }
+
   @Post('activity/update')
   @UseGuards(AuthGuard('jwt'))
   async updateActivity(@Req() req) {

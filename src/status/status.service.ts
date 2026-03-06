@@ -400,10 +400,13 @@ export class StatusService implements OnModuleInit {
       imageUrls = originalStatus.images;
     }
 
+    // Use new content if provided and not empty, otherwise use original content or undefined
+    const finalContent = newContent?.trim() ? newContent.trim() : (originalStatus.content || undefined);
+
     // Create edited repost
     const repost = new this.statusModel({
       author: new Types.ObjectId(userId),
-      content: newContent,
+      content: finalContent,
       image: imageUrls.length > 0 ? imageUrls[0] : originalStatus.image,
       images: imageUrls,
       originalStatus: new Types.ObjectId(statusId),
