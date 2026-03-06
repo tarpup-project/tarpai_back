@@ -1,17 +1,41 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Status } from './status.schema';
 import { User } from '../users/user.schema';
 import { CloudinaryService } from '../users/cloudinary.service';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
-export class StatusService {
+export class StatusService implements OnModuleInit {
   constructor(
     @InjectModel(Status.name) private statusModel: Model<Status>,
     @InjectModel(User.name) private userModel: Model<User>,
     private cloudinaryService: CloudinaryService,
   ) {}
+
+  async onModuleInit() {
+    // Run cleanup on startup
+    await this.cleanupOldStatuses();
+  }
+
+  // Run cleanup every hour
+  @Cron(CronExpression.EVERY_HOUR)
+  async cleanupOldStatuses() {
+    try {
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      
+      const result = await this.statusModel.deleteMany({
+        createdAt: { $lt: twentyFourHoursAgo }
+      });
+
+      if (result.deletedCount > 0) {
+        console.log(`Deleted ${result.deletedCount} statuses older than 24 hours`);
+      }
+    } catch (error) {
+      console.error('Error cleaning up old statuses:', error);
+    }
+  }
 
   async createStatus(
     userId: string,
