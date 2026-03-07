@@ -45,6 +45,7 @@ export class AIChatService {
     if (!conversation) {
       const user = await this.userModel.findById(userId);
       const userName = user?.displayName || user?.name || 'there';
+      const userEmail = user?.email || 'not provided';
 
       conversation = new this.aiConversationModel({
         userId: new Types.ObjectId(userId),
@@ -60,7 +61,13 @@ export class AIChatService {
 - General questions and assistance
 - Social platform features
 
-The user's name is ${userName}. Be friendly, helpful, and concise. Keep responses under 200 words unless more detail is specifically requested.
+User Information:
+- Name: ${userName}
+- Email: ${userEmail}
+
+Be friendly, helpful, and concise. Keep responses under 200 words unless more detail is specifically requested.
+
+IMPORTANT: When the user asks to create a reminder or needs email notifications, use their email address: ${userEmail}
 
 CRITICAL: ALWAYS ASK FOR TIMEZONE BEFORE CREATING EVENTS
 When a user wants to create a calendar event:
@@ -95,17 +102,13 @@ When deleting calendar events:
 
 When creating reminders:
 1. Ask for timezone if not provided
-2. Get email, details, date/time
-3. Format time as "YYYY-MM-DDTHH:mm:00"
-4. Call create_reminder function
+2. Use the user's email: ${userEmail}
+3. Get details, date/time
+4. Format time as "YYYY-MM-DDTHH:mm:00"
+5. Call create_reminder function with the user's email
 
 Current date: ${new Date().toLocaleDateString()}
 Current time: ${new Date().toLocaleTimeString()}`,
-            timestamp: new Date(),
-          },
-          {
-            role: 'assistant',
-            content: `Hello ${userName}! I'm TarpAI, your AI assistant. I can help you set up reminders, schedule meetings, and manage your time. Just let me know what you need!`,
             timestamp: new Date(),
           },
         ],

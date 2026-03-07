@@ -29,6 +29,16 @@ export class Status extends Document {
   @Prop({ type: [String], default: [] })
   images: string[];
 
+  @Prop({ type: Object })
+  linkPreview?: {
+    url: string;
+    title?: string;
+    description?: string;
+    image?: string;
+    favicon?: string;
+    siteName?: string;
+  };
+
   @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
   likes: Types.ObjectId[];
 

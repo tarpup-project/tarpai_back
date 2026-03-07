@@ -7,6 +7,7 @@ import { StatusService } from './status.service';
 import { Status, StatusSchema } from './status.schema';
 import { User, UserSchema } from '../users/user.schema';
 import { CloudinaryService } from '../users/cloudinary.service';
+import { LinkPreviewService } from '../chat/link-preview.service';
 
 @Module({
   imports: [
@@ -24,6 +25,6 @@ import { CloudinaryService } from '../users/cloudinary.service';
     }),
   ],
   controllers: [StatusController],
-  providers: [StatusService, CloudinaryService],
+  providers: [StatusService, CloudinaryService, LinkPreviewService],
 })
 export class StatusModule {}

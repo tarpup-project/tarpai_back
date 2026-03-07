@@ -4,6 +4,7 @@ import { Model, Types } from 'mongoose';
 import { Status } from './status.schema';
 import { User } from '../users/user.schema';
 import { CloudinaryService } from '../users/cloudinary.service';
+import { LinkPreviewService } from '../chat/link-preview.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class StatusService implements OnModuleInit {
     @InjectModel(Status.name) private statusModel: Model<Status>,
     @InjectModel(User.name) private userModel: Model<User>,
     private cloudinaryService: CloudinaryService,
+    private linkPreviewService: LinkPreviewService,
   ) {}
 
   async onModuleInit() {
@@ -55,11 +57,21 @@ export class StatusService implements OnModuleInit {
       throw new ForbiddenException('Status must have either content or images');
     }
 
+    // Extract and fetch link preview if content contains a URL
+    let linkPreview: any = null;
+    if (content) {
+      const url = this.linkPreviewService.extractUrlFromMessage(content);
+      if (url) {
+        linkPreview = await this.linkPreviewService.fetchLinkPreview(url);
+      }
+    }
+
     const status = new this.statusModel({
       author: new Types.ObjectId(userId),
       content: content?.trim() || undefined,
       image: imageUrls.length > 0 ? imageUrls[0] : undefined, // Keep backward compatibility
       images: imageUrls,
+      linkPreview: linkPreview || undefined,
       likes: [],
       likesCount: 0,
       comments: [],
@@ -80,6 +92,7 @@ export class StatusService implements OnModuleInit {
         content: populatedStatus.content,
         image: populatedStatus.image,
         images: populatedStatus.images,
+        linkPreview: populatedStatus.linkPreview,
         likesCount: populatedStatus.likesCount,
         commentsCount: populatedStatus.commentsCount,
         author: populatedStatus.author,
@@ -108,6 +121,7 @@ export class StatusService implements OnModuleInit {
       content: status.content,
       image: status.image,
       images: status.images,
+      linkPreview: status.linkPreview,
       isRepost: status.isRepost,
       repostContent: status.repostContent,
       originalStatus: status.originalStatus,
@@ -117,6 +131,7 @@ export class StatusService implements OnModuleInit {
       author: status.author,
       createdAt: status.createdAt,
       isLiked: status.likes.some(like => like.toString() === userId),
+      isReposted: status.reposts.some(repost => repost.toString() === userId),
     }));
   }
 
@@ -146,11 +161,13 @@ export class StatusService implements OnModuleInit {
       content: status.content,
       image: status.image,
       images: status.images,
+      linkPreview: status.linkPreview,
       likesCount: status.likesCount,
       commentsCount: status.commentsCount,
       author: status.author,
       createdAt: status.createdAt,
       isLiked: status.likes.some(like => like.toString() === userId),
+      isReposted: status.reposts.some(repost => repost.toString() === userId),
     }));
   }
 
@@ -166,11 +183,13 @@ export class StatusService implements OnModuleInit {
       content: status.content,
       image: status.image,
       images: status.images,
+      linkPreview: status.linkPreview,
       likesCount: status.likesCount,
       commentsCount: status.commentsCount,
       author: status.author,
       createdAt: status.createdAt,
       isLiked: currentUserId ? status.likes.some(like => like.toString() === currentUserId) : false,
+      isReposted: currentUserId ? status.reposts.some(repost => repost.toString() === currentUserId) : false,
     }));
   }
 
@@ -186,11 +205,13 @@ export class StatusService implements OnModuleInit {
       content: status.content,
       image: status.image,
       images: status.images,
+      linkPreview: status.linkPreview,
       likesCount: status.likesCount,
       commentsCount: status.commentsCount,
       author: status.author,
       createdAt: status.createdAt,
       isLiked: userId ? status.likes.some(like => like.toString() === userId) : false,
+      isReposted: userId ? status.reposts.some(repost => repost.toString() === userId) : false,
     }));
   }
 
@@ -210,11 +231,13 @@ export class StatusService implements OnModuleInit {
       content: status.content,
       image: status.image,
       images: status.images,
+      linkPreview: status.linkPreview,
       likesCount: status.likesCount,
       commentsCount: status.commentsCount,
       author: status.author,
       createdAt: status.createdAt,
       isLiked: userId ? status.likes.some(like => like.toString() === userId) : false,
+      isReposted: userId ? status.reposts.some(repost => repost.toString() === userId) : false,
       comments: status.comments.map((comment: any) => ({
         id: comment._id,
         content: comment.content,
