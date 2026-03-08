@@ -423,8 +423,9 @@ export class AuthService {
     name: string, 
     email: string, 
     profileUserId: string,
-    action: 'follow' | 'followers' | 'following',
-    profileUsername: string
+    action: 'follow' | 'followers' | 'following' | 'view_status',
+    profileUsername: string,
+    statusId?: string
   ) {
     console.log('=== createPendingProfileUser called ===');
     console.log('name:', name);
@@ -432,6 +433,7 @@ export class AuthService {
     console.log('profileUserId:', profileUserId);
     console.log('action:', action);
     console.log('profileUsername:', profileUsername);
+    console.log('statusId:', statusId);
     
     const existingUser = await this.userModel.findOne({ email });
     if (existingUser) {
@@ -454,6 +456,7 @@ export class AuthService {
         profileUserId,
         action,
         profileUsername,
+        statusId: statusId || undefined,
         createdAt: new Date()
       }
     });
@@ -473,7 +476,8 @@ export class AuthService {
       name, 
       profileUser.displayName || profileUser.name,
       action,
-      profileUsername
+      profileUsername,
+      statusId
     );
 
     return {

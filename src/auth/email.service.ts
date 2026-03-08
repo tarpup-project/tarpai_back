@@ -427,8 +427,9 @@ export class EmailService {
     profileUserId: string,
     senderName: string,
     profileName: string,
-    action: 'follow' | 'followers' | 'following',
-    profileUsername: string
+    action: 'follow' | 'followers' | 'following' | 'view_status',
+    profileUsername: string,
+    statusId?: string
   ) {
     if (!this.transporter) {
       console.log('Email not configured. VERIFICATION TOKEN:', token);
@@ -436,12 +437,15 @@ export class EmailService {
     }
 
     const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
-    const verificationUrl = `${frontendUrl}/verify-profile?token=${token}&profileUserId=${profileUserId}&action=${action}&profileUsername=${profileUsername}`;
+    const verificationUrl = statusId 
+      ? `${frontendUrl}/verify-profile?token=${token}&profileUserId=${profileUserId}&action=${action}&profileUsername=${profileUsername}&statusId=${statusId}`
+      : `${frontendUrl}/verify-profile?token=${token}&profileUserId=${profileUserId}&action=${action}&profileUsername=${profileUsername}`;
 
     const actionText = {
       follow: 'follow',
       followers: 'view followers of',
-      following: 'view following of'
+      following: 'view following of',
+      view_status: 'view status from'
     };
 
     const mailOptions = {
@@ -469,7 +473,7 @@ export class EmailService {
 
             <div style="text-align: center; margin: 30px 0;">
               <a href="${verificationUrl}" style="background: #667eea; color: white; padding: 15px 40px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold; font-size: 16px;">
-                Verify Email & ${action === 'follow' ? 'Follow' : action === 'followers' ? 'View Followers' : 'View Following'}
+                Verify Email & ${action === 'follow' ? 'Follow' : action === 'followers' ? 'View Followers' : action === 'following' ? 'View Following' : 'View Status'}
               </a>
             </div>
 

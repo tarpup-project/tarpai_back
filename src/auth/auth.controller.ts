@@ -95,8 +95,9 @@ export class AuthController {
       name: string;
       email: string;
       profileUserId: string;
-      action: 'follow' | 'followers' | 'following';
+      action: 'follow' | 'followers' | 'following' | 'view_status';
       profileUsername: string;
+      statusId?: string;
     },
   ) {
     return this.authService.createPendingProfileUser(
@@ -104,7 +105,8 @@ export class AuthController {
       body.email,
       body.profileUserId,
       body.action,
-      body.profileUsername
+      body.profileUsername,
+      body.statusId
     );
   }
 
