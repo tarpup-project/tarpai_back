@@ -377,6 +377,12 @@ export class UsersService {
 
   async getBroadcastCount(userId: string) {
     const user = await this.userModel.findById(userId);
+    
+    // Check if user exists
+    if (!user) {
+      throw new Error('User not found');
+    }
+    
     const now = new Date();
     const BROADCAST_PERIOD_DAYS = 365; // 1 year
     

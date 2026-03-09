@@ -19,6 +19,10 @@ export class FollowsService {
     const currentUser = await this.userModel.findById(currentUserId);
     const targetUser = await this.userModel.findById(targetUserId);
 
+    if (!currentUser) {
+      throw new NotFoundException('Current user not found');
+    }
+
     if (!targetUser) {
       throw new NotFoundException('User not found');
     }
@@ -27,17 +31,20 @@ export class FollowsService {
       throw new BadRequestException('Already following this user');
     }
 
-    currentUser.following.push(targetUser._id);
-    targetUser.followers.push(currentUser._id);
+    // Use findByIdAndUpdate to avoid validation issues with other fields
+    await this.userModel.findByIdAndUpdate(currentUserId, {
+      $addToSet: { following: targetUser._id }
+    });
 
-    await currentUser.save();
-    await targetUser.save();
+    await this.userModel.findByIdAndUpdate(targetUserId, {
+      $addToSet: { followers: currentUser._id }
+    });
 
     // Create follow notification
     await this.notificationsService.createFollowNotification(
       currentUserId,
       targetUserId,
-      currentUser.name,
+      currentUser.name || currentUser.email,
     );
 
     return {
@@ -54,19 +61,22 @@ export class FollowsService {
     const currentUser = await this.userModel.findById(currentUserId);
     const targetUser = await this.userModel.findById(targetUserId);
 
+    if (!currentUser) {
+      throw new NotFoundException('Current user not found');
+    }
+
     if (!targetUser) {
       throw new NotFoundException('User not found');
     }
 
-    currentUser.following = currentUser.following.filter(
-      (id) => id.toString() !== targetUserId,
-    );
-    targetUser.followers = targetUser.followers.filter(
-      (id) => id.toString() !== currentUserId,
-    );
+    // Use findByIdAndUpdate to avoid validation issues
+    await this.userModel.findByIdAndUpdate(currentUserId, {
+      $pull: { following: targetUserId }
+    });
 
-    await currentUser.save();
-    await targetUser.save();
+    await this.userModel.findByIdAndUpdate(targetUserId, {
+      $pull: { followers: currentUserId }
+    });
 
     return { message: 'Successfully unfollowed user' };
   }

@@ -10,7 +10,11 @@
     "start:prod": "node dist/main.js",
     "postinstall": "npm run build",
     "generate-usernames": "ts-node src/scripts/generate-usernames.ts",
-    "delete-users-without-bio": "ts-node src/scripts/delete-users-without-bio.ts"
+    "delete-users-without-bio": "ts-node src/scripts/delete-users-without-bio.ts",
+    "migrate-users": "ts-node src/scripts/migrate-users.ts",
+    "replace-users": "ts-node src/scripts/replace-users.ts",
+    "migrate-followers": "ts-node src/scripts/migrate-followers.ts",
+    "fix-missing-names": "ts-node src/scripts/fix-missing-names.ts"
   },
   "repository": {
     "type": "git",

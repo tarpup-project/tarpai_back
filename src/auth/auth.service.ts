@@ -224,14 +224,18 @@ export class AuthService {
     let user = await this.userModel.findOne({ email: profile.email });
 
     if (!user) {
-      const username = await this.generateUniqueUsername(profile.name);
+      // Ensure name is not null or empty
+      const name = profile.name || profile.email?.split('@')[0] || 'User';
+      const username = await this.generateUniqueUsername(name);
+      
       user = new this.userModel({
-        name: profile.name,
+        name: name,
+        displayName: name,
         email: profile.email,
         password: '',
         username,
         isVerified: true,
-        avatar: profile.avatar,
+        avatar: profile.avatar || 'https://res.cloudinary.com/dhjzwncjf/image/upload/v1771255225/Screenshot_2026-02-16_at_4.20.04_pm_paes1n.png',
       });
       await user.save();
     } else {
@@ -242,9 +246,19 @@ export class AuthService {
         // Keep the source and referrer for analytics, but mark them as no longer silent
       }
       
+      // Update name if it's missing
+      if (!user.name) {
+        user.name = profile.name || profile.email?.split('@')[0] || 'User';
+      }
+      
+      // Update displayName if it's missing
+      if (!user.displayName) {
+        user.displayName = user.name;
+      }
+      
       // Update avatar if they don't have one or have the default avatar
       if (!user.avatar || user.avatar === 'https://res.cloudinary.com/dhjzwncjf/image/upload/v1771255225/Screenshot_2026-02-16_at_4.20.04_pm_paes1n.png') {
-        user.avatar = profile.avatar;
+        user.avatar = profile.avatar || user.avatar;
       }
       
       await user.save();
