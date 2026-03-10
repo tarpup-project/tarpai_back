@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -8,6 +8,7 @@ import { EmailService } from './email.service';
 import { User, UserSchema } from '../users/user.schema';
 import { JwtStrategy } from './jwt.strategy';
 import { GoogleStrategy } from './google.strategy';
+import { FollowsModule } from '../follows/follows.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { GoogleStrategy } from './google.strategy';
       }),
       inject: [ConfigService],
     }),
+    forwardRef(() => FollowsModule),
   ],
   controllers: [AuthController],
   providers: [AuthService, EmailService, JwtStrategy, GoogleStrategy],

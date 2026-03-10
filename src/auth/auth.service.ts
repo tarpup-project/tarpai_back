@@ -1,10 +1,11 @@
-import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { User } from '../users/user.schema';
 import { EmailService } from './email.service';
+import { FollowsService } from '../follows/follows.service';
 
 @Injectable()
 export class AuthService {
@@ -12,6 +13,8 @@ export class AuthService {
     @InjectModel(User.name) private userModel: Model<User>,
     private jwtService: JwtService,
     private emailService: EmailService,
+    @Inject(forwardRef(() => FollowsService))
+    private followsService: FollowsService,
   ) {}
 
   private generateVerificationCode(): string {
@@ -551,6 +554,94 @@ export class AuthService {
       },
       pendingAction: pendingAction,
       message: 'Email verified successfully! Completing your action...',
+    };
+  }
+
+  async sendLoginLinkForProfileAction(
+    email: string,
+    profileUserId: string,
+    action: string,
+    profileUsername: string,
+  ) {
+    console.log('=== sendLoginLinkForProfileAction called ===');
+    console.log('email:', email);
+    console.log('profileUserId:', profileUserId);
+    console.log('action:', action);
+    
+    // Find existing user by email
+    const user = await this.userModel.findOne({ email });
+    if (!user) {
+      throw new BadRequestException('No account found with this email');
+    }
+
+    // Check if user is already verified
+    if (user.isVerified) {
+      // User is already verified, perform the action directly
+      console.log('User already verified, performing action directly');
+      
+      // Generate JWT token for the user
+      const jwtToken = this.jwtService.sign({ id: user._id, email: user.email });
+      
+      // Perform the action based on type
+      let actionResult = null;
+      if (action === 'follow') {
+        // Use follows service to follow the user
+        try {
+          await this.followsService.followUser(user._id.toString(), profileUserId);
+          console.log(`User ${user._id} followed ${profileUserId}`);
+          actionResult = 'followed';
+        } catch (error) {
+          console.log('Follow action error (may already be following):', error.message);
+          // If already following, just log in without error
+          if (error.message?.includes('Already following')) {
+            actionResult = 'already_following';
+          }
+        }
+      }
+      
+      return {
+        token: jwtToken,
+        user: {
+          id: user._id,
+          email: user.email,
+          name: user.name,
+          username: user.username,
+          isVerified: user.isVerified,
+        },
+        message: 'Logged in successfully',
+        actionPerformed: action,
+        actionResult: actionResult,
+      };
+    }
+
+    // User not verified yet, send verification email
+    const token = this.generateVerificationToken();
+    user.verificationToken = token;
+    user.verificationCodeExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    
+    // Store pending action with proper structure
+    user.pendingProfileAction = {
+      profileUserId: profileUserId as any,
+      action: action as any,
+      profileUsername: profileUsername,
+      createdAt: new Date(),
+    };
+    
+    await user.save();
+
+    // Send login email using the profile verification link method
+    await this.emailService.sendProfileVerificationLink(
+      email,
+      token,
+      profileUserId,
+      user.name,
+      profileUsername,
+      action as any,
+      profileUsername,
+    );
+
+    return {
+      message: 'Login link sent to your email',
     };
   }
 

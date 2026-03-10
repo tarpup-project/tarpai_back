@@ -115,6 +115,23 @@ export class AuthController {
     return this.authService.verifyProfileAction(body.token, body.profileUserId);
   }
 
+  @Post('send-login-link')
+  async sendLoginLink(
+    @Body() body: {
+      email: string;
+      profileUserId: string;
+      action: string;
+      profileUsername: string;
+    },
+  ) {
+    return this.authService.sendLoginLinkForProfileAction(
+      body.email,
+      body.profileUserId,
+      body.action,
+      body.profileUsername,
+    );
+  }
+
   @Post('google/calendar')
   @UseGuards(AuthGuard('jwt'))
   async connectGoogleCalendar(

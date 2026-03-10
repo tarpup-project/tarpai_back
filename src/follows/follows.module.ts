@@ -12,5 +12,6 @@ import { NotificationsModule } from '../notifications/notifications.module';
   ],
   controllers: [FollowsController],
   providers: [FollowsService],
+  exports: [FollowsService],
 })
 export class FollowsModule {}
