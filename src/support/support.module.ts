@@ -8,6 +8,8 @@ import { Feedback, FeedbackSchema } from './feedback.schema';
 import { HelpArticle, HelpArticleSchema } from './help-article.schema';
 import { ReleaseNote, ReleaseNoteSchema } from './release-note.schema';
 import { Lead, LeadSchema } from './lead.schema';
+import { User, UserSchema } from '../users/user.schema';
+import { EmailService } from '../auth/email.service';
 
 @Module({
   imports: [
@@ -16,6 +18,7 @@ import { Lead, LeadSchema } from './lead.schema';
       { name: HelpArticle.name, schema: HelpArticleSchema },
       { name: ReleaseNote.name, schema: ReleaseNoteSchema },
       { name: Lead.name, schema: LeadSchema },
+      { name: User.name, schema: UserSchema },
     ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -27,6 +30,6 @@ import { Lead, LeadSchema } from './lead.schema';
     }),
   ],
   controllers: [SupportController],
-  providers: [SupportService],
+  providers: [SupportService, EmailService],
 })
 export class SupportModule {}

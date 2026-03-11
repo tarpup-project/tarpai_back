@@ -1,10 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { ConfigService } from '@nestjs/config';
 import { Model, Types } from 'mongoose';
 import { Feedback } from './feedback.schema';
 import { HelpArticle } from './help-article.schema';
 import { ReleaseNote } from './release-note.schema';
 import { Lead } from './lead.schema';
+import { User } from '../users/user.schema';
+import { EmailService } from '../auth/email.service';
 
 @Injectable()
 export class SupportService {
@@ -13,6 +16,9 @@ export class SupportService {
     @InjectModel(HelpArticle.name) private helpArticleModel: Model<HelpArticle>,
     @InjectModel(ReleaseNote.name) private releaseNoteModel: Model<ReleaseNote>,
     @InjectModel(Lead.name) private leadModel: Model<Lead>,
+    @InjectModel(User.name) private userModel: Model<User>,
+    private emailService: EmailService,
+    private configService: ConfigService,
   ) {}
 
   // Feedback methods
@@ -31,6 +37,60 @@ export class SupportService {
     });
 
     await feedback.save();
+
+    // Send feedback email to admin addresses
+    try {
+      // Get admin emails from environment variables
+      const adminEmailsEnv = this.configService.get<string>('ADMIN_EMAILS') || '';
+      const adminEmails = adminEmailsEnv.split(',').map(e => e.trim()).filter(e => e);
+      
+      if (adminEmails.length === 0) {
+        console.warn('No admin emails configured in ADMIN_EMAILS environment variable');
+        return {
+          message: 'Feedback submitted successfully',
+          feedback: {
+            id: feedback._id,
+            rating: feedback.rating,
+            message: feedback.message,
+            createdAt: feedback.createdAt,
+          },
+        };
+      }
+      
+      // Fetch user details if userId is provided
+      let userName = 'Anonymous';
+      let userEmail = email || 'Not provided';
+      
+      if (userId) {
+        try {
+          const user = await this.userModel.findById(userId);
+          if (user) {
+            userName = user.displayName || user.name || 'Unknown User';
+            if (user.email) {
+              userEmail = user.email;
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch user details:', error);
+        }
+      }
+
+      const feedbackDetails = `
+        <strong>New Feedback Received</strong><br><br>
+        <strong>Rating:</strong> ${rating}/5<br>
+        <strong>Message:</strong> ${message}<br>
+        <strong>User Name:</strong> ${userName}<br>
+        <strong>User Email:</strong> ${userEmail}<br>
+        <strong>Submitted at:</strong> ${new Date().toLocaleString()}<br>
+      `;
+
+      for (const adminEmail of adminEmails) {
+        await this.emailService.sendFeedbackEmail(adminEmail, feedbackDetails);
+      }
+    } catch (error) {
+      console.error('Failed to send feedback email:', error);
+      // Don't throw error - feedback should still be saved even if email fails
+    }
 
     return {
       message: 'Feedback submitted successfully',

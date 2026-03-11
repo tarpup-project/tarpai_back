@@ -585,4 +585,43 @@ export class EmailService {
       console.error('Error details:', JSON.stringify(error, null, 2));
     }
   }
+
+  async sendFeedbackEmail(adminEmail: string, feedbackDetails: string) {
+    if (!this.transporter) {
+      console.log('Email not configured. Feedback details:', feedbackDetails);
+      return;
+    }
+
+    const mailOptions = {
+      from: this.configService.get<string>('EMAIL_FROM') || 'noreply@tarpai.com',
+      to: adminEmail,
+      subject: 'New Feedback Received - TarpUp',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0;">TarpUp</h1>
+          </div>
+
+          <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+            <h2 style="color: #333; margin-top: 0;">New Feedback Received</h2>
+            
+            <div style="background: white; padding: 20px; border-radius: 5px; border-left: 4px solid #667eea;">
+              ${feedbackDetails}
+            </div>
+
+            <p style="color: #999; font-size: 12px; text-align: center; margin-top: 20px;">
+              This is an automated notification from TarpUp feedback system.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      console.log('Feedback email sent successfully to:', adminEmail);
+    } catch (error) {
+      console.error('Error sending feedback email:', error);
+    }
+  }
 }
