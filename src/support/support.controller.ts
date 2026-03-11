@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Req, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, Req, Headers, Delete } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JwtService } from '@nestjs/jwt';
 import { SupportService } from './support.service';
@@ -62,6 +62,12 @@ export class SupportController {
   @Get('feedback')
   getAllFeedback() {
     return this.supportService.getAllFeedback();
+  }
+
+  // Delete feedback (admin only)
+  @Delete('feedback/:id')
+  async deleteFeedback(@Param('id') id: string) {
+    return this.supportService.deleteFeedback(id);
   }
 
   // Get help articles

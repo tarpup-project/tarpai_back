@@ -139,7 +139,7 @@ export class SupportService {
   async getAllFeedback() {
     const feedback = await this.feedbackModel
       .find()
-      .populate('user', 'name email username')
+      .populate('user', 'name email username avatar bio')
       .sort({ createdAt: -1 })
       .exec();
 
@@ -152,6 +152,18 @@ export class SupportService {
       email: item.email,
       createdAt: item.createdAt,
     }));
+  }
+
+  async deleteFeedback(id: string) {
+    const feedback = await this.feedbackModel.findByIdAndDelete(id);
+    if (!feedback) {
+      throw new NotFoundException('Feedback not found');
+    }
+
+    return {
+      message: 'Feedback deleted successfully',
+      id: feedback._id,
+    };
   }
 
   // Help Center methods
