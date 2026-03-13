@@ -440,7 +440,7 @@ export class AuthService {
     name: string, 
     email: string, 
     profileUserId: string,
-    action: 'follow' | 'followers' | 'following' | 'view_status',
+    action: 'follow' | 'followers' | 'following' | 'view_status' | 'chat',
     profileUsername: string,
     statusId?: string
   ) {
@@ -486,6 +486,7 @@ export class AuthService {
       throw new BadRequestException('Profile user not found');
     }
 
+    // Send verification email to the requester
     await this.emailService.sendProfileVerificationLink(
       email, 
       verificationToken,
@@ -496,6 +497,22 @@ export class AuthService {
       profileUsername,
       statusId
     );
+
+    // Send notification email to the existing user (profile owner) if action is chat-related
+    if (action === 'chat' || action === 'follow') {
+      try {
+        await this.emailService.sendChatRequestNotification(
+          profileUser.email,
+          profileUser.displayName || profileUser.name,
+          name,
+          email
+        );
+        console.log('Chat request notification sent to profile user:', profileUser.email);
+      } catch (error) {
+        console.error('Failed to send chat request notification:', error);
+        // Don't fail the main flow if notification fails
+      }
+    }
 
     return {
       message: 'Verification email sent. Please check your email to complete the action.',
@@ -574,6 +591,12 @@ export class AuthService {
       throw new BadRequestException('No account found with this email');
     }
 
+    // Get profile user info for notifications
+    const profileUser = await this.userModel.findById(profileUserId);
+    if (!profileUser) {
+      throw new BadRequestException('Profile user not found');
+    }
+
     // Check if user is already verified
     if (user.isVerified) {
       // User is already verified, perform the action directly
@@ -596,6 +619,22 @@ export class AuthService {
           if (error.message?.includes('Already following')) {
             actionResult = 'already_following';
           }
+        }
+      }
+      
+      // Send notification to profile user for chat-related actions
+      if (action === 'chat' || action === 'follow') {
+        try {
+          await this.emailService.sendChatRequestNotification(
+            profileUser.email,
+            profileUser.displayName || profileUser.name,
+            user.displayName || user.name,
+            user.email
+          );
+          console.log('Chat request notification sent to profile user:', profileUser.email);
+        } catch (error) {
+          console.error('Failed to send chat request notification:', error);
+          // Don't fail the main flow if notification fails
         }
       }
       
@@ -639,6 +678,22 @@ export class AuthService {
       action as any,
       profileUsername,
     );
+
+    // Send notification to profile user for chat-related actions
+    if (action === 'chat' || action === 'follow') {
+      try {
+        await this.emailService.sendChatRequestNotification(
+          profileUser.email,
+          profileUser.displayName || profileUser.name,
+          user.displayName || user.name,
+          user.email
+        );
+        console.log('Chat request notification sent to profile user:', profileUser.email);
+      } catch (error) {
+        console.error('Failed to send chat request notification:', error);
+        // Don't fail the main flow if notification fails
+      }
+    }
 
     return {
       message: 'Login link sent to your email',

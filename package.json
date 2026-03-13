@@ -16,7 +16,8 @@
     "migrate-followers": "ts-node src/scripts/migrate-followers.ts",
     "fix-missing-names": "ts-node src/scripts/fix-missing-names.ts",
     "search-text": "ts-node src/scripts/search-text.ts",
-    "migrate-bios": "ts-node src/scripts/migrate-bios.ts"
+    "migrate-bios": "ts-node src/scripts/migrate-bios.ts",
+    "delete-recent-users": "ts-node src/scripts/delete-recent-users.ts"
   },
   "repository": {
     "type": "git",

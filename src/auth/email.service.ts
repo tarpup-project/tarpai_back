@@ -480,13 +480,135 @@ export class EmailService {
     }
   }
 
+  async sendFirstMessageNotification(
+    recipientEmail: string,
+    recipientName: string,
+    senderName: string,
+    messageContent: string,
+    conversationId: string
+  ) {
+    if (!this.transporter) {
+      console.log('Email not configured. First message notification not sent.');
+      return;
+    }
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+    const chatUrl = `${frontendUrl}/chat/${conversationId}`;
+
+    const mailOptions = {
+      from: this.configService.get<string>('EMAIL_FROM') || 'noreply@tarpai.com',
+      to: recipientEmail,
+      subject: `${senderName} sent you a message on TarpUp`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0;">TarpUp</h1>
+          </div>
+
+          <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+            <h2 style="color: #333; margin-top: 0;">Hi ${recipientName}! 👋</h2>
+
+            <p style="color: #666; font-size: 16px; line-height: 1.6;">
+              <strong>${senderName}</strong> sent you a message:
+            </p>
+
+            <div style="background: white; padding: 20px; border-left: 4px solid #667eea; margin: 20px 0; border-radius: 5px;">
+              <p style="color: #333; margin: 0; font-style: italic;">
+                "${messageContent.length > 200 ? messageContent.substring(0, 200) + '...' : messageContent}"
+              </p>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${chatUrl}" style="background: #667eea; color: white; padding: 15px 40px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold; font-size: 16px;">
+                Reply to ${senderName}
+              </a>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+
+            <p style="color: #999; font-size: 12px; text-align: center;">
+              You're receiving this because ${senderName} sent you their first message on TarpUp.<br>
+              You can manage your notification preferences in your account settings.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      console.log('First message notification sent to:', recipientEmail);
+    } catch (error) {
+      console.error('Error sending first message notification:', error);
+    }
+  }
+
+  async sendChatRequestNotification(
+    existingUserEmail: string,
+    existingUserName: string,
+    requesterName: string,
+    requesterEmail: string
+  ) {
+    if (!this.transporter) {
+      console.log('Email not configured. Chat request notification not sent.');
+      return;
+    }
+
+    const mailOptions = {
+      from: this.configService.get<string>('EMAIL_FROM') || 'noreply@tarpai.com',
+      to: existingUserEmail,
+      subject: `${requesterName} wants to chat with you on TarpUp`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0;">TarpUp</h1>
+          </div>
+
+          <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+            <h2 style="color: #333; margin-top: 0;">Hi ${existingUserName}! 👋</h2>
+
+            <p style="color: #666; font-size: 16px; line-height: 1.6;">
+              <strong>${requesterName}</strong> (${requesterEmail}) wants to chat with you on TarpUp!
+            </p>
+
+            <div style="background: #e7f3ff; padding: 20px; border-left: 4px solid #2196F3; margin: 20px 0; border-radius: 5px;">
+              <p style="color: #333; margin: 0;">
+                💬 They're going through the verification process to send you a message. You'll receive their message once they verify their email.
+              </p>
+            </div>
+
+            <div style="background: #f0f8ff; padding: 15px; border-radius: 5px; margin: 20px 0;">
+              <p style="color: #333; margin: 0; font-size: 14px;">
+                📱 You can check your TarpUp messages anytime by logging into your account.
+              </p>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+
+            <p style="color: #999; font-size: 12px; text-align: center;">
+              You're receiving this notification because someone wants to chat with you on TarpUp.<br>
+              This is just a heads up - no action is required from you.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      console.log('Chat request notification sent to:', existingUserEmail);
+    } catch (error) {
+      console.error('Error sending chat request notification:', error);
+    }
+  }
+
   async sendProfileVerificationLink(
     email: string,
     token: string,
     profileUserId: string,
     senderName: string,
     profileName: string,
-    action: 'follow' | 'followers' | 'following' | 'view_status',
+    action: 'follow' | 'followers' | 'following' | 'view_status' | 'chat',
     profileUsername: string,
     statusId?: string
   ) {
@@ -504,7 +626,8 @@ export class EmailService {
       follow: 'follow',
       followers: 'view followers of',
       following: 'view following of',
-      view_status: 'view status from'
+      view_status: 'view status from',
+      chat: 'chat with'
     };
 
     const mailOptions = {
@@ -532,7 +655,7 @@ export class EmailService {
 
             <div style="text-align: center; margin: 30px 0;">
               <a href="${verificationUrl}" style="background: #667eea; color: white; padding: 15px 40px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold; font-size: 16px;">
-                Verify Email & ${action === 'follow' ? 'Follow' : action === 'followers' ? 'View Followers' : action === 'following' ? 'View Following' : 'View Status'}
+                Verify Email & ${action === 'follow' ? 'Follow' : action === 'followers' ? 'View Followers' : action === 'following' ? 'View Following' : action === 'view_status' ? 'View Status' : 'Start Chat'}
               </a>
             </div>
 

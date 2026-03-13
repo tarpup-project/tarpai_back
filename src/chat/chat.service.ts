@@ -388,6 +388,15 @@ export class ChatService {
 
     await message.save();
 
+    // Check if this is the first message in the conversation for first message notifications
+    const messageCount = await this.messageModel.countDocuments({
+      conversation: new Types.ObjectId(conversationId),
+      isDeleted: false,
+    });
+
+    const isFirstMessage = messageCount === 1; // This is the first message if count is 1 (just saved)
+    console.log('Message count in conversation:', messageCount, 'Is first message:', isFirstMessage);
+
     // Update conversation
     conversation.lastMessage = message._id as any;
     conversation.lastActivity = new Date();
@@ -458,8 +467,24 @@ export class ChatService {
             } : 'null');
             
             if (recipient) {
+              // Send first message notification if this is the first message in the conversation
+              if (isFirstMessage) {
+                console.log('This is the first message, sending first message notification to:', recipient.email);
+                try {
+                  await this.emailService.sendFirstMessageNotification(
+                    recipient.email,
+                    recipient.displayName || recipient.name,
+                    senderName,
+                    content,
+                    conversationId,
+                  );
+                  console.log('First message notification sent successfully');
+                } catch (error) {
+                  console.error('Failed to send first message notification:', error);
+                }
+              }
               // Send urgent email to ALL users if message is urgent (user-marked or AI-detected)
-              if (isUrgent || aiDetectedUrgent) {
+              else if (isUrgent || aiDetectedUrgent) {
                 console.log('Message is URGENT, sending urgent email notification to:', recipient.email);
                 await this.emailService.sendUrgentMessageNotification(
                   recipient.email,

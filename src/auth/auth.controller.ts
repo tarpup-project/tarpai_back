@@ -95,7 +95,7 @@ export class AuthController {
       name: string;
       email: string;
       profileUserId: string;
-      action: 'follow' | 'followers' | 'following' | 'view_status';
+      action: 'follow' | 'followers' | 'following' | 'view_status' | 'chat';
       profileUsername: string;
       statusId?: string;
     },
