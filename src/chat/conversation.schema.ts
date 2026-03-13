@@ -27,6 +27,12 @@ export class Conversation extends Document {
   @Prop({ type: String })
   groupName?: string;
 
+  @Prop({ default: false })
+  hasUrgentMessage: boolean;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  urgentMessageSender?: Types.ObjectId;
+
   createdAt?: Date;
   updatedAt?: Date;
 }

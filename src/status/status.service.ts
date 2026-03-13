@@ -17,26 +17,14 @@ export class StatusService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    // Run cleanup on startup
-    await this.cleanupOldStatuses();
+    // No cleanup needed - statuses are now filtered by age instead of deleted
+    console.log('StatusService initialized - statuses filtered by age in feeds');
   }
 
-  // Run cleanup every hour
-  @Cron(CronExpression.EVERY_HOUR)
+  // Cleanup method removed - statuses are now filtered by age instead of deleted
   async cleanupOldStatuses() {
-    try {
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      
-      const result = await this.statusModel.deleteMany({
-        createdAt: { $lt: twentyFourHoursAgo }
-      });
-
-      if (result.deletedCount > 0) {
-        console.log(`Deleted ${result.deletedCount} statuses older than 24 hours`);
-      }
-    } catch (error) {
-      console.error('Error cleaning up old statuses:', error);
-    }
+    // No longer needed - statuses persist but are filtered from feeds after 24 hours
+    console.log('Status cleanup disabled - using age-based filtering instead');
   }
 
   async createStatus(
@@ -150,8 +138,14 @@ export class StatusService implements OnModuleInit {
     const followingIds = user.following.map(f => f._id);
     followingIds.push(new Types.ObjectId(userId)); // Include own statuses
 
+    // Filter out statuses older than 24 hours for feeds
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
     const statuses = await this.statusModel
-      .find({ author: { $in: followingIds } })
+      .find({ 
+        author: { $in: followingIds },
+        createdAt: { $gte: twentyFourHoursAgo } // Only show statuses from last 24 hours
+      })
       .populate('author', 'name username avatar')
       .sort({ createdAt: -1 })
       .exec();
@@ -171,9 +165,17 @@ export class StatusService implements OnModuleInit {
     }));
   }
 
-  async getUserStatuses(userId: string, currentUserId?: string) {
+  async getUserStatuses(userId: string, currentUserId?: string, includeOld: boolean = false) {
+    let query: any = { author: new Types.ObjectId(userId) };
+    
+    // If not including old statuses and not viewing own profile, filter by 24 hours
+    if (!includeOld && currentUserId !== userId) {
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      query.createdAt = { $gte: twentyFourHoursAgo };
+    }
+
     const statuses = await this.statusModel
-      .find({ author: new Types.ObjectId(userId) })
+      .find(query)
       .populate('author', 'name username avatar')
       .sort({ createdAt: -1 })
       .exec();
@@ -194,8 +196,11 @@ export class StatusService implements OnModuleInit {
   }
 
   async getAllStatuses(userId?: string) {
+    // Filter out statuses older than 24 hours for public feeds
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
     const statuses = await this.statusModel
-      .find()
+      .find({ createdAt: { $gte: twentyFourHoursAgo } }) // Only show statuses from last 24 hours
       .populate('author', 'name username avatar')
       .sort({ createdAt: -1 })
       .exec();

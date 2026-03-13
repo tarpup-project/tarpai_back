@@ -9,20 +9,56 @@ export class EmailService {
   constructor(private configService: ConfigService) {
     const emailUser = this.configService.get<string>('EMAIL_USER');
     const emailPassword = this.configService.get<string>('EMAIL_PASSWORD');
+    const emailService = this.configService.get<string>('EMAIL_SERVICE') || 'gmail';
+    const emailHost = this.configService.get<string>('EMAIL_HOST') || 'smtp.gmail.com';
+    const emailPort = this.configService.get<number>('EMAIL_PORT') || 587;
+
+    console.log('Email service configuration:', {
+      service: emailService,
+      host: emailHost,
+      port: emailPort,
+      user: emailUser ? `${emailUser.substring(0, 3)}***` : 'not set',
+      hasPassword: !!emailPassword
+    });
 
     if (emailUser && emailPassword) {
-      this.transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 587,
-        secure: false, // Use STARTTLS
-        auth: {
-          user: emailUser,
-          pass: emailPassword,
-        },
-        tls: {
-          rejectUnauthorized: false
-        }
-      });
+      // Production-ready configuration with fallback to Gmail
+      if (emailService === 'gmail') {
+        this.transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            user: emailUser,
+            pass: emailPassword,
+          },
+          tls: {
+            rejectUnauthorized: false
+          },
+          connectionTimeout: 30000,
+          greetingTimeout: 30000,  
+          socketTimeout: 30000,
+          debug: process.env.NODE_ENV === 'development',
+          logger: process.env.NODE_ENV === 'development',
+        } as any);
+      } else {
+        // Manual SMTP configuration for other services
+        this.transporter = nodemailer.createTransport({
+          host: emailHost,
+          port: emailPort,
+          secure: emailPort === 465,
+          auth: {
+            user: emailUser,
+            pass: emailPassword,
+          },
+          tls: {
+            rejectUnauthorized: false
+          },
+          connectionTimeout: 30000,
+          greetingTimeout: 30000,
+          socketTimeout: 30000,
+          debug: process.env.NODE_ENV === 'development',
+          logger: process.env.NODE_ENV === 'development',
+        } as any);
+      }
     }
   }
 
@@ -168,6 +204,13 @@ export class EmailService {
     console.log('Sender Name:', senderName);
     console.log('Message Content:', messageContent);
     
+    // Skip email in development if there are connectivity issues
+    if (process.env.NODE_ENV === 'development' && !process.env.FORCE_EMAIL) {
+      console.log('Skipping email notification in development mode');
+      console.log('Set FORCE_EMAIL=true in .env to enable emails in development');
+      return;
+    }
+    
     if (!this.transporter) {
       console.log('Email not configured. Urgent message notification not sent.');
       return;
@@ -238,12 +281,28 @@ export class EmailService {
     console.log('Attempting to send urgent email...');
     
     try {
+      // Test connection first
+      await this.transporter.verify();
+      console.log('SMTP connection verified successfully');
+      
       const result = await this.transporter.sendMail(mailOptions);
       console.log('Urgent message notification sent successfully to:', recipientEmail);
       console.log('Email send result:', result);
     } catch (error) {
       console.error('Error sending urgent message notification:', error);
       console.error('Error details:', JSON.stringify(error, null, 2));
+      
+      // Log specific error information
+      if (error.code === 'ESOCKET' || error.code === 'ETIMEDOUT') {
+        console.error('Network connectivity issue. Check:');
+        console.error('1. Internet connection');
+        console.error('2. Firewall settings');
+        console.error('3. DNS resolution for smtp.gmail.com');
+        console.error('4. Gmail SMTP settings');
+      }
+      
+      // Don't throw the error to prevent breaking the chat flow
+      // The message was still sent successfully, just the email notification failed
     }
   }
 
@@ -622,6 +681,21 @@ export class EmailService {
       console.log('Feedback email sent successfully to:', adminEmail);
     } catch (error) {
       console.error('Error sending feedback email:', error);
+    }
+  }
+
+  async testEmailConnection(): Promise<{ success: boolean; error?: string }> {
+    if (!this.transporter) {
+      return { success: false, error: 'Email not configured' };
+    }
+
+    try {
+      await this.transporter.verify();
+      console.log('Email connection test successful');
+      return { success: true };
+    } catch (error) {
+      console.error('Email connection test failed:', error);
+      return { success: false, error: error.message };
     }
   }
 }

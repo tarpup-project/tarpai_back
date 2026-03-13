@@ -99,7 +99,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('send_message')
   async handleSendMessage(
-    @MessageBody() data: { conversationId: string; content: string; type?: string; replyTo?: string },
+    @MessageBody() data: { conversationId: string; content: string; type?: string; replyTo?: string; isUrgent?: boolean },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
@@ -110,6 +110,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         data.type || 'text',
         undefined,
         data.replyTo,
+        data.isUrgent || false,
       );
 
       // Emit to all participants in the conversation

@@ -63,7 +63,7 @@ export class ChatController {
   @UseInterceptors(FileInterceptor('file'))
   sendMessage(
     @Param('id') conversationId: string,
-    @Body() body: { content: string; type?: string; replyTo?: string },
+    @Body() body: { content: string; type?: string; replyTo?: string; isUrgent?: boolean },
     @UploadedFile() file: Express.Multer.File,
     @Req() req,
   ) {
@@ -74,6 +74,7 @@ export class ChatController {
       body.type || 'text',
       file,
       body.replyTo,
+      body.isUrgent || false,
     );
   }
 
@@ -97,6 +98,12 @@ export class ChatController {
   @Delete('messages/:id')
   deleteMessage(@Param('id') messageId: string, @Req() req) {
     return this.chatService.deleteMessage(messageId, req.user.id);
+  }
+
+  // Mark message as urgent
+  @Put('messages/:id/urgent')
+  markMessageAsUrgent(@Param('id') messageId: string, @Req() req) {
+    return this.chatService.markMessageAsUrgent(messageId, req.user.id);
   }
 
   // Search users for new conversation

@@ -68,7 +68,11 @@ export class StatusController {
       }
     }
 
-    return this.statusService.getUserStatuses(userId, currentUserId);
+    // If viewing own profile, include all statuses (includeOld = true)
+    // If viewing someone else's profile, filter by 24 hours (includeOld = false)
+    const includeOld = currentUserId === userId;
+
+    return this.statusService.getUserStatuses(userId, currentUserId, includeOld);
   }
 
   // Get all statuses (public feed)

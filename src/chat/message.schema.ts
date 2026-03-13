@@ -43,6 +43,9 @@ export class Message extends Document {
   @Prop({ default: false })
   isDeleted: boolean;
 
+  @Prop({ default: false })
+  isUrgent: boolean;
+
   createdAt?: Date;
   updatedAt?: Date;
 }

@@ -181,6 +181,7 @@ export class ChatService {
           lastMessage: conv.lastMessage,
           unreadCount,
           lastActivity: conv.lastActivity,
+          hasUrgentMessage: conv.hasUrgentMessage && conv.urgentMessageSender?.toString() !== userId,
         };
       } else {
         // Direct message
@@ -192,6 +193,7 @@ export class ChatService {
           lastMessage: conv.lastMessage,
           unreadCount,
           lastActivity: conv.lastActivity,
+          hasUrgentMessage: conv.hasUrgentMessage && conv.urgentMessageSender?.toString() !== userId,
         };
       }
     });
@@ -307,6 +309,7 @@ export class ChatService {
     type: string = 'text',
     file?: Express.Multer.File,
     replyToId?: string,
+    isUrgent: boolean = false,
   ) {
     const conversation = await this.conversationModel.findById(conversationId);
     
@@ -353,6 +356,13 @@ export class ChatService {
       }
     }
 
+    // Check if message is urgent using AI (only for text messages)
+    let aiDetectedUrgent = false;
+    if (type === 'text' && content && content.trim().length > 0) {
+      aiDetectedUrgent = await this.aiService.isMessageUrgent(content);
+      console.log('Message urgency check:', aiDetectedUrgent ? 'URGENT' : 'NORMAL');
+    }
+
     const messageData: any = {
       conversation: new Types.ObjectId(conversationId),
       sender: new Types.ObjectId(senderId),
@@ -361,6 +371,7 @@ export class ChatService {
       fileUrl,
       fileName,
       readBy: [new Types.ObjectId(senderId)], // Sender has read their own message
+      isUrgent: isUrgent || aiDetectedUrgent, // Combine user-marked and AI-detected urgency
     };
 
     // Add link preview if available
@@ -380,16 +391,15 @@ export class ChatService {
     // Update conversation
     conversation.lastMessage = message._id as any;
     conversation.lastActivity = new Date();
+    
+    // Set hasUrgentMessage flag if this message is urgent (either user-marked or AI-detected)
+    if (isUrgent || aiDetectedUrgent) {
+      conversation.hasUrgentMessage = true;
+      conversation.urgentMessageSender = new Types.ObjectId(senderId);
+    }
 
     // Get sender info for notification
     const senderName = sender?.displayName || sender?.name || 'Someone';
-
-    // Check if message is urgent using AI (only for text messages)
-    let isUrgent = false;
-    if (type === 'text' && content && content.trim().length > 0) {
-      isUrgent = await this.aiService.isMessageUrgent(content);
-      console.log('Message urgency check:', isUrgent ? 'URGENT' : 'NORMAL');
-    }
 
     // Update unread count and create notification for other participants
     const notificationPromises: Promise<void>[] = [];
@@ -448,8 +458,8 @@ export class ChatService {
             } : 'null');
             
             if (recipient) {
-              // Send urgent email to ALL users if message is urgent
-              if (isUrgent) {
+              // Send urgent email to ALL users if message is urgent (user-marked or AI-detected)
+              if (isUrgent || aiDetectedUrgent) {
                 console.log('Message is URGENT, sending urgent email notification to:', recipient.email);
                 await this.emailService.sendUrgentMessageNotification(
                   recipient.email,
@@ -607,7 +617,10 @@ export class ChatService {
                       conversationId,
                       recipientId.toString(),
                       autoReplyContent,
-                      'text'
+                      'text',
+                      undefined,
+                      undefined,
+                      false // Auto-replies are never urgent
                     );
                     console.log('✓ Auto-reply sent successfully');
                   } catch (error) {
@@ -654,6 +667,11 @@ export class ChatService {
 
     // Reset unread count
     conversation.unreadCount.set(userId, 0);
+    
+    // Clear hasUrgentMessage flag and sender when messages are read
+    conversation.hasUrgentMessage = false;
+    conversation.urgentMessageSender = undefined;
+    
     await conversation.save();
 
     return { success: true };
@@ -673,6 +691,32 @@ export class ChatService {
     message.isDeleted = true;
     message.content = 'This message was deleted';
     await message.save();
+
+    return { success: true };
+  }
+
+  async markMessageAsUrgent(messageId: string, userId: string) {
+    const message = await this.messageModel.findById(messageId);
+    
+    if (!message) {
+      throw new NotFoundException('Message not found');
+    }
+
+    if (message.sender.toString() !== userId) {
+      throw new ForbiddenException('You can only mark your own messages as urgent');
+    }
+
+    // Mark message as urgent
+    message.isUrgent = true;
+    await message.save();
+
+    // Update conversation to show it has urgent messages
+    const conversation = await this.conversationModel.findById(message.conversation);
+    if (conversation) {
+      conversation.hasUrgentMessage = true;
+      conversation.urgentMessageSender = new Types.ObjectId(userId);
+      await conversation.save();
+    }
 
     return { success: true };
   }
