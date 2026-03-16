@@ -278,6 +278,22 @@ export class StatusService implements OnModuleInit {
     };
   }
 
+  async getStatusLikes(statusId: string, userId?: string) {
+    const status = await this.statusModel.findById(statusId).populate({
+      path: 'likes',
+      select: 'name displayName username avatar',
+    });
+
+    if (!status) {
+      throw new NotFoundException('Status not found');
+    }
+
+    return {
+      likes: status.likes,
+      likesCount: status.likesCount,
+    };
+  }
+
   async addComment(statusId: string, userId: string, content: string) {
     const status = await this.statusModel.findById(statusId);
     if (!status) {

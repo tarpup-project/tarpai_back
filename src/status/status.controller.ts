@@ -121,6 +121,27 @@ export class StatusController {
     return this.statusService.likeStatus(id, req.user.id);
   }
 
+  // Get users who liked the status
+  @Get(':id/likes')
+  async getStatusLikes(
+    @Param('id') id: string,
+    @Headers('authorization') auth?: string,
+  ) {
+    let userId: string | undefined;
+
+    if (auth && auth.startsWith('Bearer ')) {
+      try {
+        const token = auth.substring(7);
+        const decoded = this.jwtService.verify(token);
+        userId = decoded.id;
+      } catch (error) {
+        userId = undefined;
+      }
+    }
+
+    return this.statusService.getStatusLikes(id, userId);
+  }
+
   // Add comment to status
   @Post(':id/comments')
   @UseGuards(JwtAuthGuard)
