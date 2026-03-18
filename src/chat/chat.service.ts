@@ -369,14 +369,39 @@ export class ChatService {
 
     await message.save();
 
-    // Check if this is the first message in the conversation for first message notifications
+    // Check message count for this conversation to determine notification logic
     const messageCount = await this.messageModel.countDocuments({
       conversation: new Types.ObjectId(conversationId),
       isDeleted: false,
     });
 
-    const isFirstMessage = messageCount === 1; // This is the first message if count is 1 (just saved)
-    console.log('Message count in conversation:', messageCount, 'Is first message:', isFirstMessage);
+    console.log('Message count in conversation:', messageCount);
+
+    // Notification logic:
+    // - If first message is urgent: Send emails for first 3 messages, then only urgent
+    // - If first message is NOT urgent: Only send emails for urgent messages from the start
+    let shouldSendEmailNotification = false;
+    
+    if (messageCount === 1) {
+      // This is the first message - check if it's urgent to set the pattern
+      shouldSendEmailNotification = isUrgent || aiDetectedUrgent;
+      
+      // Store whether first message was urgent in conversation for future reference
+      if (isUrgent || aiDetectedUrgent) {
+        conversation.firstMessageWasUrgent = true;
+      } else {
+        conversation.firstMessageWasUrgent = false;
+      }
+    } else {
+      // For subsequent messages, check the pattern set by first message
+      if (conversation.firstMessageWasUrgent) {
+        // First message was urgent, so send emails for first 3 messages, then only urgent
+        shouldSendEmailNotification = messageCount <= 3 || isUrgent || aiDetectedUrgent;
+      } else {
+        // First message was not urgent, so only send emails for urgent messages
+        shouldSendEmailNotification = isUrgent || aiDetectedUrgent;
+      }
+    }
 
     // Update conversation
     conversation.lastMessage = message._id as any;
@@ -464,33 +489,55 @@ export class ChatService {
             } : 'null');
             
             if (recipient) {
-              // Send first message notification ONLY if this message is urgent/important
-              if (isFirstMessage && (isUrgent || aiDetectedUrgent)) {
-                console.log('This is the first URGENT message, sending first message notification to:', recipient.email);
-                try {
-                  await this.emailService.sendFirstMessageNotification(
+              // Send email notification based on new logic:
+              // - If first message was urgent: Send emails for first 3 messages, then only urgent
+              // - If first message was NOT urgent: Only send emails for urgent messages
+              if (shouldSendEmailNotification) {
+                if (messageCount === 1 && (isUrgent || aiDetectedUrgent)) {
+                  console.log(`This is the FIRST message and it's URGENT, sending email notification to:`, recipient.email);
+                  try {
+                    await this.emailService.sendChatReplyNotification(
+                      recipient.email,
+                      recipient.displayName || recipient.name,
+                      senderName,
+                      content,
+                      conversationId,
+                    );
+                    console.log('Email notification sent successfully for first urgent message');
+                  } catch (error) {
+                    console.error('Failed to send email notification:', error);
+                  }
+                } else if (conversation.firstMessageWasUrgent && messageCount <= 3) {
+                  console.log(`First message was urgent, this is message #${messageCount} (within first 3), sending email notification to:`, recipient.email);
+                  try {
+                    await this.emailService.sendChatReplyNotification(
+                      recipient.email,
+                      recipient.displayName || recipient.name,
+                      senderName,
+                      content,
+                      conversationId,
+                    );
+                    console.log('Email notification sent successfully (first message was urgent, within first 3)');
+                  } catch (error) {
+                    console.error('Failed to send email notification:', error);
+                  }
+                } else if (isUrgent || aiDetectedUrgent) {
+                  console.log('Message is URGENT, sending urgent email notification to:', recipient.email);
+                  await this.emailService.sendUrgentMessageNotification(
                     recipient.email,
                     recipient.displayName || recipient.name,
                     senderName,
                     content,
                     conversationId,
                   );
-                  console.log('First urgent message notification sent successfully');
-                } catch (error) {
-                  console.error('Failed to send first urgent message notification:', error);
+                  console.log('Urgent email notification sent successfully');
                 }
-              }
-              // Send urgent email to ALL users if message is urgent (user-marked or AI-detected)
-              else if (isUrgent || aiDetectedUrgent) {
-                console.log('Message is URGENT, sending urgent email notification to:', recipient.email);
-                await this.emailService.sendUrgentMessageNotification(
-                  recipient.email,
-                  recipient.displayName || recipient.name,
-                  senderName,
-                  content,
-                  conversationId,
-                );
-                console.log('Urgent email notification sent successfully');
+              } else {
+                if (conversation.firstMessageWasUrgent === false) {
+                  console.log(`First message was NOT urgent, message #${messageCount} is also not urgent, skipping email notification`);
+                } else {
+                  console.log(`Message #${messageCount} is not urgent and past first 3 messages, skipping email notification`);
+                }
               }
 
               // ALWAYS check if this conversation has any active urgent messages that haven't been replied to
@@ -513,12 +560,13 @@ export class ChatService {
               });
               
               // Look up active urgent messages in this conversation where current sender is the recipient
+              // Only notify for the FIRST reply (when hasBeenRepliedTo is still false)
               const activeUrgentMessage = await this.urgentMessageModel.findOne({
                 conversation: new Types.ObjectId(conversationId),
                 recipient: new Types.ObjectId(senderId), // Only get urgent messages where current sender is the recipient
-                hasBeenRepliedTo: false,
+                hasBeenRepliedTo: false, // Only notify for the FIRST reply
                 isActive: true,
-              }).populate('sender', 'name displayName email').sort({ createdAt: 1 }); // Get the first active urgent message
+              }).populate('sender', 'name displayName email').sort({ createdAt: 1 });
               
               if (activeUrgentMessage) {
                 console.log('Found active urgent message where current sender is the recipient');
@@ -535,39 +583,16 @@ export class ChatService {
                   conversationId,
                 );
                 
-                // Mark the urgent message as replied to
+                // Mark the urgent message as replied to so future replies don't trigger notification
                 activeUrgentMessage.hasBeenRepliedTo = true;
                 await activeUrgentMessage.save();
                 
-                console.log('Urgent reply notification sent successfully and urgent message marked as replied');
-              } else {
-                console.log('No active urgent messages found where current sender is the recipient');
-              }
-
-              // Send regular email only to silent signup users (for non-urgent, non-first messages)
-              if (recipient.isSilentSignup && !isFirstMessage && !(isUrgent || aiDetectedUrgent)) {
-                // Check if this is not a reply to an urgent message
-                const hasActiveUrgentMessage = await this.urgentMessageModel.findOne({
-                  conversation: new Types.ObjectId(conversationId),
-                  hasBeenRepliedTo: false,
-                  isActive: true,
-                });
+                // Mark conversation as having replied to initial message
+                conversation.hasRepliedToInitialMessage = true;
                 
-                if (!hasActiveUrgentMessage) {
-                  console.log('Recipient is a silent signup user, sending regular email notification...');
-                  await this.emailService.sendChatReplyNotification(
-                    recipient.email,
-                    recipient.displayName || recipient.name,
-                    senderName,
-                    content,
-                    conversationId,
-                  );
-                  console.log('Regular email notification sent successfully');
-                } else {
-                  console.log('Conversation has active urgent messages, skipping regular email for silent signup user');
-                }
-              } else if (!isFirstMessage && !(isUrgent || aiDetectedUrgent) && !recipient.isSilentSignup) {
-                console.log('Message is not urgent, not first message, and recipient is not silent signup - skipping email');
+                console.log('Urgent reply notification sent successfully - will not notify for subsequent replies');
+              } else {
+                console.log('No active urgent messages found where current sender is the recipient (already replied)');
               }
             } else {
               console.log('Recipient not found, skipping email');

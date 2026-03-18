@@ -35,24 +35,27 @@ export class AiService {
     const emergencyKeywords = [
       'fire', 'accident', 'danger', 'help needed', 'crisis', 'chaos',
       'medical emergency', 'police', 'emergency', 'urgent', 'urgently',
-      'asap', 'immediately', 'right now'
+      'asap', 'immediately', 'right now', 'help me', 'help please'
     ];
     
     // Time-sensitive keywords
     const timeSensitiveKeywords = [
       'today', 'tonight', 'tomorrow', 'in 5 minutes', 'deadline',
-      'in an hour', 'this morning', 'this afternoon', 'this evening'
+      'in an hour', 'this morning', 'this afternoon', 'this evening',
+      'next week', 'this week', 'next month'
     ];
     
     // Important life events
     const importantEvents = [
-      'wedding', 'marriage', 'funeral', 'birth', 'graduation', 'interview'
+      'wedding', 'marriage', 'funeral', 'birth', 'graduation', 'interview',
+      'appointment'
     ];
     
     // Critical meetings/appointments
     const criticalMeetings = [
       'meeting tomorrow', 'appointment today', 'interview tomorrow',
-      'doctor appointment today', 'surgery', 'court', 'legal'
+      'doctor appointment today', 'surgery', 'court', 'legal',
+      'appointment next week', 'meeting next week', 'we have an appointment'
     ];
     
     // Immediate action requests
@@ -212,10 +215,10 @@ export class AiService {
       if (!this.openai) {
         // Fallback responses if AI is not configured
         const fallbackResponses = [
-          `Hi ${senderName}! Thanks for reaching out. I'm not available right now, but I'll get back to you soon! 😊`,
-          `Hey ${senderName}! I'm doing well, thanks for asking! Currently away but will respond when I'm back.`,
-          `Hello ${senderName}! Hope you're doing great too! I'm not available at the moment but will catch up with you later.`,
-          `Hi there ${senderName}! Thanks for checking in. I'm away right now but will get back to you soon!`
+          `Hi ${senderName}! Thanks for reaching out. I'm not available right now, but I'll get back to you soon! 😊\n\nBut if you have an important message, you can leave it here and I'll be notified right away! 📱`,
+          `Hey ${senderName}! I'm doing well, thanks for asking! Currently away but will respond when I'm back.\n\nBut if you have an important message, you can leave it here and I'll be notified right away! 📱`,
+          `Hello ${senderName}! Hope you're doing great too! I'm not available at the moment but will catch up with you later.\n\nBut if you have an important message, you can leave it here and I'll be notified right away! 📱`,
+          `Hi there ${senderName}! Thanks for checking in. I'm away right now but will get back to you soon!\n\nBut if you have an important message, you can leave it here and I'll be notified right away! 📱`
         ];
         return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
       }
@@ -263,12 +266,15 @@ export class AiService {
           throw new Error('No auto-reply generated');
         }
 
-        console.log('Generated auto-reply:', autoReply);
-        return autoReply;
+        // Add the important message statement
+        const finalAutoReply = `${autoReply}\n\nBut if you have an important message, you can leave it here and I'll be notified right away! 📱`;
+
+        console.log('Generated auto-reply:', finalAutoReply);
+        return finalAutoReply;
       } catch (error) {
         console.error('Error generating auto-reply:', error);
         // Fallback response
-        return `Hi ${senderName}! Thanks for your message. ${recipientName} is not available right now but will get back to you soon! 😊`;
+        return `Hi ${senderName}! Thanks for your message. ${recipientName} is not available right now but will get back to you soon! 😊\n\nBut if you have an important message, you can leave it here and I'll be notified right away! 📱`;
       }
     }
 }

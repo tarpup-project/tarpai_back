@@ -33,6 +33,12 @@ export class Conversation extends Document {
   @Prop({ type: Types.ObjectId, ref: 'User' })
   urgentMessageSender?: Types.ObjectId;
 
+  @Prop({ default: false })
+  hasRepliedToInitialMessage: boolean;
+
+  @Prop({ type: Boolean })
+  firstMessageWasUrgent?: boolean;
+
   createdAt?: Date;
   updatedAt?: Date;
 }
