@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
 import { ChatGateway } from './chat.gateway';
+import { ChatCleanupService } from './chat-cleanup.service';
 import { AiService } from './ai.service';
 import { LinkPreviewService } from './link-preview.service';
 import { Conversation, ConversationSchema } from './conversation.schema';
@@ -31,10 +33,11 @@ import { EmailService } from '../auth/email.service';
       }),
       inject: [ConfigService],
     }),
+    ScheduleModule.forRoot(),
     NotificationsModule,
   ],
   controllers: [ChatController],
-  providers: [ChatService, ChatGateway, CloudinaryService, EmailService, AiService, LinkPreviewService],
+  providers: [ChatService, ChatGateway, ChatCleanupService, CloudinaryService, EmailService, AiService, LinkPreviewService],
   exports: [ChatService, ChatGateway],
 })
 export class ChatModule {}

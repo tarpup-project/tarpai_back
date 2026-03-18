@@ -15,7 +15,7 @@ interface UserToDelete {
 // List of usernames to delete - MODIFY THIS ARRAY
 const USERNAMES_TO_DELETE = [
   // Add usernames here, for example:
-  'tetranix',
+  'trialfiveundefi',
 ];
 
 async function deleteUsersByUsername() {

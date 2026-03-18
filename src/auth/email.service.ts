@@ -487,6 +487,13 @@ export class EmailService {
     messageContent: string,
     conversationId: string
   ) {
+    // Skip email in development if there are connectivity issues
+    if (process.env.NODE_ENV === 'development' && !process.env.FORCE_EMAIL) {
+      console.log('Skipping first message email notification in development mode');
+      console.log('Set FORCE_EMAIL=true in .env to enable emails in development');
+      return;
+    }
+    
     if (!this.transporter) {
       console.log('Email not configured. First message notification not sent.');
       return;
@@ -540,6 +547,18 @@ export class EmailService {
       console.log('First message notification sent to:', recipientEmail);
     } catch (error) {
       console.error('Error sending first message notification:', error);
+      
+      // Log specific error information but don't break the chat flow
+      if (error.code === 'ESOCKET' || error.code === 'ETIMEDOUT') {
+        console.error('Network connectivity issue. Check:');
+        console.error('1. Internet connection');
+        console.error('2. Firewall settings');
+        console.error('3. DNS resolution for smtp.gmail.com');
+        console.error('4. Gmail SMTP settings');
+      }
+      
+      // Don't throw the error to prevent breaking the chat flow
+      // The message was still sent successfully, just the email notification failed
     }
   }
 

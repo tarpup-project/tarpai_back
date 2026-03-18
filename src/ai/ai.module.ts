@@ -3,7 +3,6 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AIController } from './ai.controller';
 import { AIChatService } from './ai-chat.service';
 import { ReminderService } from './reminder.service';
-import { CalendarService } from './calendar.service';
 import { AIConversation, AIConversationSchema } from './ai-conversation.schema';
 import { Reminder, ReminderSchema } from './reminder.schema';
 import { User, UserSchema } from '../users/user.schema';
@@ -21,7 +20,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     ScheduleModule.forRoot(),
   ],
   controllers: [AIController],
-  providers: [AIChatService, ReminderService, CalendarService],
-  exports: [AIChatService, ReminderService, CalendarService],
+  providers: [AIChatService, ReminderService],
+  exports: [AIChatService, ReminderService],
 })
 export class AIModule {}

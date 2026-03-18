@@ -46,6 +46,9 @@ export class Message extends Document {
   @Prop({ default: false })
   isUrgent: boolean;
 
+  @Prop({ default: false })
+  isAI: boolean;
+
   createdAt?: Date;
   updatedAt?: Date;
 }

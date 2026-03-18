@@ -29,133 +29,81 @@ export class AiService {
       return false;
     }
 
-    const lowerContent = messageContent.toLowerCase();
-
-    // First, check for explicit urgency keywords (guaranteed urgent)
-    const urgencyKeywords = [
-      'urgent', 'urgently', 'emergency', 'asap', 'immediately', 'quickly',
-      'right now', 'right away', 'hurry', 'fast', 'critical', 'crisis',
-      'chaos', 'help', 'sos', 'alert', 'warning', 'danger'
+    const lowerMessage = messageContent.toLowerCase();
+    
+    // Emergency situations
+    const emergencyKeywords = [
+      'fire', 'accident', 'danger', 'help needed', 'crisis', 'chaos',
+      'medical emergency', 'police', 'emergency', 'urgent', 'urgently',
+      'asap', 'immediately', 'right now'
     ];
-
-    const hasUrgencyKeyword = urgencyKeywords.some(keyword => 
-      lowerContent.includes(keyword)
-    );
-
-    if (hasUrgencyKeyword) {
-      console.log('Message contains urgency keyword, marking as URGENT');
-      return true;
-    }
-
-    // Check for time-sensitive phrases (guaranteed urgent)
-    const timeSensitivePatterns = [
-      'tomorrow', 'today', 'tonight', 'this evening', 'this morning',
-      'next week', 'next month', 'this week', 'in \\d+ (minute|hour|day)',
-      'by (tomorrow|today|tonight)', 'before (tomorrow|today)',
-      'deadline', 'due date', 'expires'
+    
+    // Time-sensitive keywords
+    const timeSensitiveKeywords = [
+      'today', 'tonight', 'tomorrow', 'in 5 minutes', 'deadline',
+      'in an hour', 'this morning', 'this afternoon', 'this evening'
     ];
-
-    const hasTimeSensitive = timeSensitivePatterns.some(pattern => {
-      const regex = new RegExp(pattern, 'i');
-      return regex.test(lowerContent);
-    });
-
-    if (hasTimeSensitive) {
-      console.log('Message contains time-sensitive phrase, marking as URGENT');
-      return true;
-    }
-
-    // Check for important occasions/events (guaranteed urgent)
-    const occasionKeywords = [
-      'wedding', 'marriage', 'married', 'marry', 'funeral', 'burial',
-      'graduation', 'interview', 'meeting', 'appointment', 'conference',
-      'party', 'celebration', 'ceremony', 'event', 'birthday'
+    
+    // Important life events
+    const importantEvents = [
+      'wedding', 'marriage', 'funeral', 'birth', 'graduation', 'interview'
     ];
-
-    const hasOccasion = occasionKeywords.some(keyword => 
-      lowerContent.includes(keyword)
-    );
-
-    if (hasOccasion) {
-      console.log('Message contains occasion/event keyword, marking as URGENT');
-      return true;
-    }
-
-    // Check for action-required phrases
-    const actionPatterns = [
-      'i need', 'we need', 'need to', 'must', 'have to', 'got to',
-      'please come', 'come now', 'come quickly', 'call me', 'text me'
+    
+    // Critical meetings/appointments
+    const criticalMeetings = [
+      'meeting tomorrow', 'appointment today', 'interview tomorrow',
+      'doctor appointment today', 'surgery', 'court', 'legal'
     ];
-
-    const hasActionRequired = actionPatterns.some(pattern => 
-      lowerContent.includes(pattern)
-    );
-
-    if (hasActionRequired) {
-      console.log('Message requires immediate action, marking as URGENT');
-      return true;
+    
+    // Immediate action requests
+    const immediateActions = [
+      'need help now', 'come quickly', 'please respond urgently',
+      'must be done today', 'system failure', 'security breach',
+      'lost passport', 'missed deadline'
+    ];
+    
+    // Check for emergency keywords
+    for (const keyword of emergencyKeywords) {
+      if (lowerMessage.includes(keyword)) {
+        console.log('Message contains emergency keyword, marking as URGENT');
+        return true;
+      }
     }
-
-    // If no keywords matched, use AI as backup for edge cases
-    if (!this.openai) {
-      console.log('AI not configured and no urgency keywords found, treating as non-urgent');
-      return false;
+    
+    // Check for time-sensitive keywords
+    for (const keyword of timeSensitiveKeywords) {
+      if (lowerMessage.includes(keyword)) {
+        console.log('Message contains time-sensitive keyword, marking as URGENT');
+        return true;
+      }
     }
-
-    try {
-      console.log('No urgency keywords found, checking with AI:', messageContent.substring(0, 50) + '...');
-      
-      const completion = await this.openai.chat.completions.create({
-        model: 'openai/gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content: `You are an AI that analyzes messages to determine if they are urgent or important. 
-
-Urgent/important messages include:
-- Emergency situations (fire, accident, danger, help needed, crisis, chaos)
-- Time-sensitive requests with specific timeframes (tomorrow, today, tonight, next week, in 5 minutes, deadline, ASAP)
-- Messages containing the word "urgent" or "urgently" or "emergency"
-- Important life events and occasions (wedding, marriage, funeral, birth, graduation, interview)
-- Critical meetings or appointments (meeting tomorrow, appointment today, interview)
-- Requests for immediate action (need now, need urgently, come quickly)
-- Important activities or events happening soon
-- Serious problems requiring attention
-
-NOT urgent messages include:
-- Casual greetings without time pressure (hi, hello, how are you, what's up)
-- General small talk (weather, sports, casual updates)
-- Questions without urgency (what do you think about...)
-- Friendly conversations without time constraints
-- General statements without action needed
-
-Key indicators of urgency:
-- Words like: urgent, urgently, emergency, ASAP, now, immediately, quickly
-- Time references: tomorrow, today, tonight, next week, this evening, in X minutes/hours
-- Occasions: wedding, marriage, funeral, party, celebration, interview, meeting
-- Action words with urgency: need, must, have to, required
-
-Respond with ONLY "YES" if the message is urgent/important, or "NO" if it's not urgent.`
-          },
-          {
-            role: 'user',
-            content: `Is this message urgent or important? Message: "${messageContent}"`
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 10,
-      });
-
-      const response = completion.choices[0]?.message?.content?.trim().toUpperCase();
-      const isUrgent = response === 'YES';
-      
-      console.log('AI urgency analysis result:', isUrgent ? 'URGENT' : 'NOT URGENT');
-      return isUrgent;
-    } catch (error) {
-      console.error('Error analyzing message urgency:', error);
-      // On error, default to non-urgent to avoid spam
-      return false;
+    
+    // Check for important events
+    for (const event of importantEvents) {
+      if (lowerMessage.includes(event)) {
+        console.log('Message contains important event keyword, marking as URGENT');
+        return true;
+      }
     }
+    
+    // Check for critical meetings
+    for (const meeting of criticalMeetings) {
+      if (lowerMessage.includes(meeting)) {
+        console.log('Message contains critical meeting keyword, marking as URGENT');
+        return true;
+      }
+    }
+    
+    // Check for immediate actions
+    for (const action of immediateActions) {
+      if (lowerMessage.includes(action)) {
+        console.log('Message contains immediate action keyword, marking as URGENT');
+        return true;
+      }
+    }
+    
+    console.log('Message does not contain urgency indicators, marking as NOT URGENT');
+    return false;
   }
     async shouldAutoReply(messageContent: string): Promise<boolean> {
       if (!messageContent || messageContent.trim().length === 0) {

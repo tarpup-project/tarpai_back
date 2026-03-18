@@ -63,7 +63,7 @@ export class ChatController {
   @UseInterceptors(FileInterceptor('file'))
   sendMessage(
     @Param('id') conversationId: string,
-    @Body() body: { content: string; type?: string; replyTo?: string; isUrgent?: boolean },
+    @Body() body: { content: string; type?: string; replyTo?: string; isUrgent?: boolean; isAI?: boolean },
     @UploadedFile() file: Express.Multer.File,
     @Req() req,
   ) {
@@ -75,6 +75,7 @@ export class ChatController {
       file,
       body.replyTo,
       body.isUrgent || false,
+      body.isAI || false,
     );
   }
 
@@ -143,5 +144,15 @@ export class ChatController {
       return { error: 'URL parameter is required' };
     }
     return this.linkPreviewService.fetchLinkPreview(url);
+  }
+
+  // Manual cleanup of empty conversations (for testing)
+  @Get('cleanup-empty')
+  async cleanupEmptyConversations(@Req() req: any) {
+    const result = await this.chatService.cleanupEmptyConversations();
+    return {
+      message: 'Cleanup completed',
+      ...result,
+    };
   }
 }

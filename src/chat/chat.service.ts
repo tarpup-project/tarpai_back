@@ -41,36 +41,12 @@ export class ChatService {
       return this.getConversation(existingConversation._id.toString(), userId);
     }
 
-    // Check if users follow each other or if one follows the other
-    // Add a small retry mechanism to handle race conditions
-    let user, participant;
-    let retryCount = 0;
-    const maxRetries = 3;
-    
-    while (retryCount < maxRetries) {
-      user = await this.userModel.findById(userId);
-      participant = await this.userModel.findById(participantId);
+    // Verify that both users exist
+    const user = await this.userModel.findById(userId);
+    const participant = await this.userModel.findById(participantId);
 
-      if (!user || !participant) {
-        throw new NotFoundException('User not found');
-      }
-
-      const userFollowsParticipant = user.following.some(id => id.toString() === participantId);
-      const participantFollowsUser = participant.following.some(id => id.toString() === userId);
-
-      if (userFollowsParticipant || participantFollowsUser) {
-        // Follow relationship found, proceed with conversation creation
-        break;
-      }
-
-      // If no follow relationship found and this is not the last retry, wait and try again
-      if (retryCount < maxRetries - 1) {
-        console.log(`Follow relationship not found, retrying... (${retryCount + 1}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, 200)); // Wait 200ms before retry
-        retryCount++;
-      } else {
-        throw new ForbiddenException('You can only chat with people you follow or who follow you');
-      }
+    if (!user || !participant) {
+      throw new NotFoundException('User not found');
     }
 
     const conversation = new this.conversationModel({
@@ -289,6 +265,7 @@ export class ChatService {
         fileUrl: msg.fileUrl,
         fileName: msg.fileName,
         sender: msg.sender,
+        isAI: msg.isAI || false,
         linkPreview: msg.linkPreview,
         replyTo: msg.replyTo ? {
           id: (msg.replyTo as any)._id,
@@ -312,6 +289,7 @@ export class ChatService {
     file?: Express.Multer.File,
     replyToId?: string,
     isUrgent: boolean = false,
+    isAI: boolean = false,
   ) {
     const conversation = await this.conversationModel.findById(conversationId);
     
@@ -374,6 +352,7 @@ export class ChatService {
       fileName,
       readBy: [new Types.ObjectId(senderId)], // Sender has read their own message
       isUrgent: isUrgent || aiDetectedUrgent, // Combine user-marked and AI-detected urgency
+      isAI: isAI, // Mark if this is an AI-generated message
     };
 
     // Add link preview if available
@@ -513,58 +492,58 @@ export class ChatService {
                 );
                 console.log('Urgent email notification sent successfully');
               }
-              // Check if this conversation has any active urgent messages that haven't been replied to
+
+              // ALWAYS check if this conversation has any active urgent messages that haven't been replied to
               // If so, notify the original urgent sender for ANY reply (regardless of reply urgency)
-              else {
-                console.log('Checking if conversation has active urgent messages...');
-                console.log('Current sender ID:', senderId);
-                console.log('Conversation ID:', conversationId);
+              console.log('Checking if conversation has active urgent messages...');
+              console.log('Current sender ID:', senderId);
+              console.log('Conversation ID:', conversationId);
+              
+              // First, let's see all urgent messages in this conversation for debugging
+              const allUrgentInConversation = await this.urgentMessageModel.find({
+                conversation: new Types.ObjectId(conversationId),
+              }).populate('sender', 'name displayName email').populate('recipient', 'name displayName email');
+              
+              console.log(`Found ${allUrgentInConversation.length} urgent messages in this conversation:`);
+              allUrgentInConversation.forEach((msg, index) => {
+                console.log(`  ${index + 1}. Sender: ${(msg.sender as any)?.name} (${msg.sender})`);
+                console.log(`     Recipient: ${(msg.recipient as any)?.name} (${msg.recipient})`);
+                console.log(`     HasBeenRepliedTo: ${msg.hasBeenRepliedTo}, IsActive: ${msg.isActive}`);
+                console.log(`     Current sender matches recipient: ${msg.recipient?.toString() === senderId}`);
+              });
+              
+              // Look up active urgent messages in this conversation where current sender is the recipient
+              const activeUrgentMessage = await this.urgentMessageModel.findOne({
+                conversation: new Types.ObjectId(conversationId),
+                recipient: new Types.ObjectId(senderId), // Only get urgent messages where current sender is the recipient
+                hasBeenRepliedTo: false,
+                isActive: true,
+              }).populate('sender', 'name displayName email').sort({ createdAt: 1 }); // Get the first active urgent message
+              
+              if (activeUrgentMessage) {
+                console.log('Found active urgent message where current sender is the recipient');
+                console.log('Original urgent sender:', (activeUrgentMessage.sender as any).email);
+                console.log('Current sender (recipient replying):', senderId);
+                console.log('Sending reply notification to original urgent message sender...');
                 
-                // First, let's see all urgent messages in this conversation for debugging
-                const allUrgentInConversation = await this.urgentMessageModel.find({
-                  conversation: new Types.ObjectId(conversationId),
-                }).populate('sender', 'name displayName email').populate('recipient', 'name displayName email');
+                await this.emailService.sendUrgentReplyNotification(
+                  (activeUrgentMessage.sender as any).email,
+                  (activeUrgentMessage.sender as any).displayName || (activeUrgentMessage.sender as any).name,
+                  senderName,
+                  content,
+                  activeUrgentMessage.content,
+                  conversationId,
+                );
                 
-                console.log(`Found ${allUrgentInConversation.length} urgent messages in this conversation:`);
-                allUrgentInConversation.forEach((msg, index) => {
-                  console.log(`  ${index + 1}. Sender: ${(msg.sender as any)?.name} (${msg.sender})`);
-                  console.log(`     Recipient: ${(msg.recipient as any)?.name} (${msg.recipient})`);
-                  console.log(`     HasBeenRepliedTo: ${msg.hasBeenRepliedTo}, IsActive: ${msg.isActive}`);
-                  console.log(`     Current sender matches recipient: ${msg.recipient?.toString() === senderId}`);
-                });
+                // Mark the urgent message as replied to
+                activeUrgentMessage.hasBeenRepliedTo = true;
+                await activeUrgentMessage.save();
                 
-                // Look up active urgent messages in this conversation where current sender is the recipient
-                const activeUrgentMessage = await this.urgentMessageModel.findOne({
-                  conversation: new Types.ObjectId(conversationId),
-                  recipient: new Types.ObjectId(senderId), // Only get urgent messages where current sender is the recipient
-                  hasBeenRepliedTo: false,
-                  isActive: true,
-                }).populate('sender', 'name displayName email').sort({ createdAt: 1 }); // Get the first active urgent message
-                
-                if (activeUrgentMessage) {
-                  console.log('Found active urgent message where current sender is the recipient');
-                  console.log('Original urgent sender:', (activeUrgentMessage.sender as any).email);
-                  console.log('Current sender (recipient replying):', senderId);
-                  console.log('Sending reply notification to original urgent message sender...');
-                  
-                  await this.emailService.sendUrgentReplyNotification(
-                    (activeUrgentMessage.sender as any).email,
-                    (activeUrgentMessage.sender as any).displayName || (activeUrgentMessage.sender as any).name,
-                    senderName,
-                    content,
-                    activeUrgentMessage.content,
-                    conversationId,
-                  );
-                  
-                  // Mark the urgent message as replied to
-                  activeUrgentMessage.hasBeenRepliedTo = true;
-                  await activeUrgentMessage.save();
-                  
-                  console.log('Urgent reply notification sent successfully and urgent message marked as replied');
-                } else {
-                  console.log('No active urgent messages found where current sender is the recipient');
-                }
+                console.log('Urgent reply notification sent successfully and urgent message marked as replied');
+              } else {
+                console.log('No active urgent messages found where current sender is the recipient');
               }
+
               // Send regular email only to silent signup users (for non-urgent, non-first messages)
               if (recipient.isSilentSignup && !isFirstMessage && !(isUrgent || aiDetectedUrgent)) {
                 // Check if this is not a reply to an urgent message
@@ -629,6 +608,7 @@ export class ChatService {
       fileUrl: populatedMessage.fileUrl,
       fileName: populatedMessage.fileName,
       sender: populatedMessage.sender,
+      isAI: populatedMessage.isAI || false,
       linkPreview: populatedMessage.linkPreview,
       replyTo: populatedMessage.replyTo ? {
         id: (populatedMessage.replyTo as any)._id,
@@ -726,7 +706,8 @@ export class ChatService {
                       'text',
                       undefined,
                       undefined,
-                      false // Auto-replies are never urgent
+                      false, // Auto-replies are never urgent
+                      true   // Mark as AI-generated message
                     );
                     console.log('✓ Auto-reply sent successfully');
                   } catch (error) {
@@ -875,14 +856,10 @@ export class ChatService {
       throw new NotFoundException('User not found');
     }
 
-    // Get users that follow the current user or that the current user follows
-    const followingIds = user.following.map(id => id.toString());
-    const followerIds = user.followers.map(id => id.toString());
-    const allowedUserIds = [...new Set([...followingIds, ...followerIds])];
-
+    // Search all users (no follow restriction)
     const users = await this.userModel
       .find({
-        _id: { $in: allowedUserIds.map(id => new Types.ObjectId(id)) },
+        _id: { $ne: new Types.ObjectId(userId) }, // Exclude the current user
         $or: [
           { name: { $regex: query, $options: 'i' } },
           { username: { $regex: query, $options: 'i' } },
@@ -946,5 +923,48 @@ export class ChatService {
 
   async getConversationDocument(conversationId: string) {
     return this.conversationModel.findById(conversationId).exec();
+  }
+
+  async cleanupEmptyConversations() {
+    console.log('Running cleanup for empty conversations...');
+    
+    // Find conversations that are older than 5 minutes and have no messages
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    
+    try {
+      // Get all conversations older than 5 minutes
+      const oldConversations = await this.conversationModel.find({
+        createdAt: { $lt: fiveMinutesAgo },
+        isActive: true,
+      });
+
+      console.log(`Found ${oldConversations.length} conversations older than 5 minutes`);
+
+      let deletedCount = 0;
+      
+      for (const conversation of oldConversations) {
+        // Check if this conversation has any messages
+        const messageCount = await this.messageModel.countDocuments({
+          conversation: conversation._id,
+          isDeleted: false,
+        });
+
+        if (messageCount === 0) {
+          // No messages found, delete this conversation
+          await this.conversationModel.findByIdAndUpdate(conversation._id, {
+            isActive: false,
+          });
+          
+          console.log(`Deleted empty conversation ${conversation._id} (created ${conversation.createdAt})`);
+          deletedCount++;
+        }
+      }
+
+      console.log(`Cleanup completed: ${deletedCount} empty conversations deleted`);
+      return { deletedCount };
+    } catch (error) {
+      console.error('Error during conversation cleanup:', error);
+      return { deletedCount: 0, error: error.message };
+    }
   }
 }

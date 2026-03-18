@@ -21,6 +21,8 @@
     "delete-users-by-username": "ts-node src/scripts/delete-users-by-username.ts",
     "fix-urgent-messages-recipients": "ts-node src/scripts/fix-urgent-messages-recipients.ts",
     "check-urgent-messages": "ts-node src/scripts/check-urgent-messages.ts",
+    "test-conversation-cleanup": "ts-node src/scripts/test-conversation-cleanup.ts",
+    "test-ai-messages": "ts-node src/scripts/test-ai-messages.ts",
     "reset-urgent-message": "ts-node src/scripts/reset-urgent-message.ts"
   },
   "repository": {

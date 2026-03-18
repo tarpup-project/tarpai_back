@@ -6,7 +6,6 @@ import OpenAI from 'openai';
 import { AIConversation, AIMessage } from './ai-conversation.schema';
 import { User } from '../users/user.schema';
 import { ReminderService } from './reminder.service';
-import { CalendarService } from './calendar.service';
 
 @Injectable()
 export class AIChatService {
@@ -17,7 +16,6 @@ export class AIChatService {
     @InjectModel(User.name) private userModel: Model<User>,
     private configService: ConfigService,
     private reminderService: ReminderService,
-    private calendarService: CalendarService,
   ) {
     const apiKey = this.configService.get<string>('OPENROUTER_API_KEY');
     
@@ -55,73 +53,46 @@ export class AIChatService {
             content: `You are TarpAI, a specialized AI assistant integrated into the TarpAI social platform. You ONLY help users with these specific tasks:
 
 ALLOWED TASKS:
-- Creating events in their Google Calendar
-- Listing and deleting events from their Google Calendar
-- Creating reminders and scheduling meetings
-- Managing appointments and schedules
-- Setting up email notifications for important events
-- Basic questions about the TarpAI platform features
-- Simple troubleshooting of platform issues
-- Account-related questions
+- Creating reminders and email notifications for important events
+- Answering questions about the TarpAI platform features and functionality
+- Helping users find other users by searching for usernames or display names
+- Basic troubleshooting of platform issues
+- Account-related questions and guidance
+- Explaining how TarpAI features work (messaging, profiles, status updates, etc.)
 
 STRICTLY FORBIDDEN - You MUST refuse these requests:
 - Writing code, scripts, or programming solutions
 - Complex technical explanations or tutorials
 - Creative writing, stories, or content creation
 - Academic help, homework, or research assistance
-- General knowledge questions unrelated to scheduling/platform
+- General knowledge questions unrelated to TarpAI platform
 - Mathematical calculations or problem solving
-- Any request that doesn't relate to scheduling, email notifications, or basic platform support
+- Calendar management or scheduling (this feature has been removed)
+- Any request that doesn't relate to reminders, platform support, or user search
 
 User Information:
 - Name: ${userName}
 - Email: ${userEmail}
 
 RESPONSE GUIDELINES:
-- Be friendly but focused on your allowed tasks
+- Be friendly and helpful while staying focused on your allowed tasks
 - Keep responses under 200 words
 - If asked to do something outside your scope, politely decline and redirect to your core functions
-- For forbidden requests, respond: "I'm specialized in helping with task scheduling, calendar management, email reminders, and basic platform support. I can't assist with [their request]. Is there anything I can help you schedule or any reminders you'd like to set up?"
+- For forbidden requests, respond: "I'm specialized in helping with reminders, TarpAI platform questions, and finding users. I can't assist with [their request]. Is there anything I can help you with regarding the platform or would you like me to set up a reminder?"
 
-IMPORTANT: When the user asks to create a reminder or needs email notifications, use their email address: ${userEmail}
-
-CRITICAL: ALWAYS ASK FOR TIMEZONE BEFORE CREATING EVENTS
-When a user wants to create a calendar event:
-1. First, ask them to specify their timezone (e.g., "What timezone are you in? For example: WAT, EST, PST, GMT, etc.")
-2. Wait for their timezone response
-3. Once you have the timezone, get other details (title, date, time, duration)
-4. Convert the time to the specified timezone format
-5. Create timestamp as "YYYY-MM-DDTHH:mm:00" using their local time
-6. Call create_calendar_event function
-7. In confirmation, mention the timezone they specified
-
-Common timezones:
-- WAT (West Africa Time): UTC+1
-- EST (Eastern Standard Time): UTC-5
-- PST (Pacific Standard Time): UTC-8
-- GMT/UTC: UTC+0
-- CET (Central European Time): UTC+1
-- IST (India Standard Time): UTC+5:30
-
-When creating calendar events:
-1. ALWAYS ask for timezone first if not provided
-2. Get event details (title, date, time, duration)
-3. Format time as "YYYY-MM-DDTHH:mm:00" (no Z)
-4. Call create_calendar_event function
-5. Confirm with the timezone mentioned
-6. If calendar not connected, call show_calendar_permission_modal
-
-When deleting calendar events:
-1. Call list_calendar_events first
-2. Find matching event
-3. Use event ID to call delete_calendar_event
+IMPORTANT: When creating reminders, use the user's email address: ${userEmail}
 
 When creating reminders:
-1. Ask for timezone if not provided
-2. Use the user's email: ${userEmail}
-3. Get details, date/time
-4. Format time as "YYYY-MM-DDTHH:mm:00"
-5. Call create_reminder function with the user's email
+1. Get reminder details (title, description, date/time)
+2. Format time as "YYYY-MM-DDTHH:mm:00Z" (UTC format)
+3. Call create_reminder function with the user's email
+4. Confirm the reminder has been set
+
+When helping users find other users:
+1. Ask for the name or username they're looking for
+2. Use the search_users function to find matching users
+3. Present the results in a friendly, organized way
+4. Help them understand how to connect with found users
 
 Current date: ${new Date().toLocaleDateString()}
 Current time: ${new Date().toLocaleTimeString()}`,
@@ -172,7 +143,7 @@ Current time: ${new Date().toLocaleTimeString()}`,
           type: 'function',
           function: {
             name: 'create_reminder',
-            description: 'Create a reminder or meeting notification that will be sent via email at the specified time. Use this when the user wants to schedule a reminder, meeting, or event.',
+            description: 'Create a reminder or meeting notification that will be sent via email at the specified time. Use this when the user wants to schedule a reminder or set up a notification.',
             parameters: {
               type: 'object',
               properties: {
@@ -200,73 +171,21 @@ Current time: ${new Date().toLocaleTimeString()}`,
         {
           type: 'function',
           function: {
-            name: 'create_calendar_event',
-            description: 'Create an event in the user\'s Google Calendar. Use this when the user wants to add a meeting, appointment, or event to their calendar.',
+            name: 'search_users',
+            description: 'Search for users in the TarpAI platform by name, display name, or username. Use this when the user wants to find other users on the platform.',
             parameters: {
               type: 'object',
               properties: {
-                title: {
+                searchQuery: {
                   type: 'string',
-                  description: 'Title of the calendar event (e.g., "Team Meeting", "Doctor Appointment")',
+                  description: 'The name, display name, or username to search for',
                 },
-                description: {
-                  type: 'string',
-                  description: 'Detailed description of the event',
-                },
-                startTime: {
-                  type: 'string',
-                  description: 'ISO 8601 date-time string for when the event starts (e.g., "2026-03-05T14:00:00Z")',
-                },
-                durationMinutes: {
+                limit: {
                   type: 'number',
-                  description: 'Duration of the event in minutes (default: 60)',
+                  description: 'Maximum number of results to return (default: 10)',
                 },
               },
-              required: ['title', 'startTime'],
-            },
-          },
-        },
-        {
-          type: 'function',
-          function: {
-            name: 'list_calendar_events',
-            description: 'List upcoming events from the user\'s Google Calendar. Use this when the user wants to see their upcoming events or find an event to delete.',
-            parameters: {
-              type: 'object',
-              properties: {
-                maxResults: {
-                  type: 'number',
-                  description: 'Maximum number of events to return (default: 10)',
-                },
-              },
-            },
-          },
-        },
-        {
-          type: 'function',
-          function: {
-            name: 'delete_calendar_event',
-            description: 'Delete an event from the user\'s Google Calendar. Use this when the user wants to remove or cancel an event. You must first list events to get the event ID.',
-            parameters: {
-              type: 'object',
-              properties: {
-                eventId: {
-                  type: 'string',
-                  description: 'The ID of the event to delete (obtained from list_calendar_events)',
-                },
-              },
-              required: ['eventId'],
-            },
-          },
-        },
-        {
-          type: 'function',
-          function: {
-            name: 'show_calendar_permission_modal',
-            description: 'Show the Google Calendar permission modal to the user. Use this when the user needs to grant calendar access before you can create, list, or delete calendar events.',
-            parameters: {
-              type: 'object',
-              properties: {},
+              required: ['searchQuery'],
             },
           },
         },
@@ -292,7 +211,7 @@ Current time: ${new Date().toLocaleTimeString()}`,
           const args = JSON.parse(toolCall.function.arguments);
           
           // Create the reminder
-          const reminder = await this.reminderService.createReminder(
+          await this.reminderService.createReminder(
             userId,
             args.title,
             args.description || '',
@@ -320,84 +239,27 @@ Current time: ${new Date().toLocaleTimeString()}`,
           };
         }
 
-        if (toolCall.function?.name === 'create_calendar_event') {
+        if (toolCall.function?.name === 'search_users') {
           const args = JSON.parse(toolCall.function.arguments);
           
           try {
-            const startTime = new Date(args.startTime);
-            const durationMinutes = args.durationMinutes || 60;
-            const endTime = new Date(startTime.getTime() + durationMinutes * 60000);
+            // Search for users by name, display name, or username
+            const searchQuery = args.searchQuery;
+            const limit = args.limit || 10;
+            
+            const users = await this.userModel.find({
+              $or: [
+                { name: { $regex: searchQuery, $options: 'i' } },
+                { displayName: { $regex: searchQuery, $options: 'i' } },
+                { username: { $regex: searchQuery, $options: 'i' } },
+              ],
+            })
+            .select('name displayName username avatar')
+            .limit(limit)
+            .exec();
 
-            // Create the calendar event
-            const event = await this.calendarService.createCalendarEvent(
-              userId,
-              args.title,
-              args.description || '',
-              startTime,
-              endTime,
-            );
-
-            // Create a response about the event
-            const confirmationMessage = `✅ Great! I've added "${args.title}" to your Google Calendar for ${startTime.toLocaleString()}. The event will last ${durationMinutes} minutes. You'll receive reminders 30 minutes and 10 minutes before it starts.`;
-
-            // Add AI response to conversation
-            const assistantMessage: AIMessage = {
-              role: 'assistant',
-              content: confirmationMessage,
-              timestamp: new Date(),
-            };
-
-            conversation.messages.push(assistantMessage);
-            conversation.lastMessageAt = new Date();
-            await conversation.save();
-
-            return {
-              response: confirmationMessage,
-              conversationId: conversation._id.toString(),
-            };
-          } catch (error) {
-            // If calendar not connected, inform the user
-            const errorMessage = error.message.includes('Calendar not connected')
-              ? "I see you haven't connected your Google Calendar yet. Let me help you with that!"
-              : "I encountered an error while trying to add the event to your calendar. Please try again or check your calendar connection.";
-
-            const assistantMessage: AIMessage = {
-              role: 'assistant',
-              content: errorMessage,
-              timestamp: new Date(),
-            };
-
-            conversation.messages.push(assistantMessage);
-            conversation.lastMessageAt = new Date();
-            await conversation.save();
-
-            // If calendar not connected, trigger the modal
-            if (error.message.includes('Calendar not connected')) {
-              return {
-                response: errorMessage,
-                conversationId: conversation._id.toString(),
-                action: 'show_calendar_modal',
-              };
-            }
-
-            return {
-              response: errorMessage,
-              conversationId: conversation._id.toString(),
-            };
-          }
-        }
-
-        if (toolCall.function?.name === 'list_calendar_events') {
-          const args = JSON.parse(toolCall.function.arguments || '{}');
-          
-          try {
-            const events = await this.calendarService.listCalendarEvents(
-              userId,
-              args.maxResults || 10,
-            );
-
-            if (events.length === 0) {
-              const message = "You don't have any upcoming events in your calendar.";
+            if (users.length === 0) {
+              const message = `I couldn't find any users matching "${searchQuery}". Try searching with a different name or username.`;
               
               const assistantMessage: AIMessage = {
                 role: 'assistant',
@@ -415,51 +277,33 @@ Current time: ${new Date().toLocaleTimeString()}`,
               };
             }
 
-            // Format events list for user display
-            let eventsList = "Here are your upcoming events:\n\n";
-            const eventData: any[] = [];
-            events.forEach((event: any, index: number) => {
-              const start = new Date(event.start.dateTime || event.start.date);
-              eventsList += `${index + 1}. ${event.summary}\n`;
-              eventsList += `   📅 ${start.toLocaleString()}\n`;
-              if (event.description) {
-                eventsList += `   📝 ${event.description}\n`;
-              }
-              eventsList += `\n`;
-              
-              // Store event data for AI to use in next request
-              eventData.push({
-                title: event.summary,
-                id: event.id,
-                start: start.toISOString(),
-              });
+            // Format users list for display
+            let usersList = `Found ${users.length} user${users.length > 1 ? 's' : ''} matching "${searchQuery}":\n\n`;
+            
+            users.forEach((user, index) => {
+              usersList += `${index + 1}. **${user.displayName || user.name}**\n`;
+              usersList += `   Username: @${user.username}\n`;
+              usersList += `   You can find them at: tarpup.ai/${user.username}\n\n`;
             });
 
-            // Add user-friendly message to conversation
-            const userMessage: AIMessage = {
+            usersList += `💡 Tip: You can visit their profile or send them a message by going to their profile page!`;
+
+            const assistantMessage: AIMessage = {
               role: 'assistant',
-              content: eventsList,
+              content: usersList,
               timestamp: new Date(),
             };
 
-            // Add hidden system message with event IDs for AI context
-            const systemMessage: AIMessage = {
-              role: 'system',
-              content: `Available event IDs for deletion: ${JSON.stringify(eventData)}`,
-              timestamp: new Date(),
-            };
-
-            conversation.messages.push(userMessage);
-            conversation.messages.push(systemMessage);
+            conversation.messages.push(assistantMessage);
             conversation.lastMessageAt = new Date();
             await conversation.save();
 
             return {
-              response: eventsList,
+              response: usersList,
               conversationId: conversation._id.toString(),
             };
           } catch (error) {
-            const errorMessage = "I encountered an error while trying to list your calendar events. Please try again.";
+            const errorMessage = "I encountered an error while searching for users. Please try again.";
 
             const assistantMessage: AIMessage = {
               role: 'assistant',
@@ -476,68 +320,6 @@ Current time: ${new Date().toLocaleTimeString()}`,
               conversationId: conversation._id.toString(),
             };
           }
-        }
-
-        if (toolCall.function?.name === 'delete_calendar_event') {
-          const args = JSON.parse(toolCall.function.arguments);
-          
-          try {
-            await this.calendarService.deleteCalendarEvent(userId, args.eventId);
-
-            const confirmationMessage = `✅ I've successfully deleted the event from your Google Calendar.`;
-
-            const assistantMessage: AIMessage = {
-              role: 'assistant',
-              content: confirmationMessage,
-              timestamp: new Date(),
-            };
-
-            conversation.messages.push(assistantMessage);
-            conversation.lastMessageAt = new Date();
-            await conversation.save();
-
-            return {
-              response: confirmationMessage,
-              conversationId: conversation._id.toString(),
-            };
-          } catch (error) {
-            const errorMessage = "I encountered an error while trying to delete the event. Please make sure the event ID is correct.";
-
-            const assistantMessage: AIMessage = {
-              role: 'assistant',
-              content: errorMessage,
-              timestamp: new Date(),
-            };
-
-            conversation.messages.push(assistantMessage);
-            conversation.lastMessageAt = new Date();
-            await conversation.save();
-
-            return {
-              response: errorMessage,
-              conversationId: conversation._id.toString(),
-            };
-          }
-        }
-
-        if (toolCall.function?.name === 'show_calendar_permission_modal') {
-          const message = "Please click the button below to connect your Google Calendar.";
-
-          const assistantMessage: AIMessage = {
-            role: 'assistant',
-            content: message,
-            timestamp: new Date(),
-          };
-
-          conversation.messages.push(assistantMessage);
-          conversation.lastMessageAt = new Date();
-          await conversation.save();
-
-          return {
-            response: message,
-            conversationId: conversation._id.toString(),
-            action: 'show_calendar_modal', // Special action flag for frontend
-          };
         }
       }
 
