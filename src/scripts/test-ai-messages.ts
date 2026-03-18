@@ -32,10 +32,13 @@ async function testAIMessages() {
     const conversation = await chatService.createConversation(user1._id.toString(), user2._id.toString());
     console.log('Conversation created:', conversation.id);
     
+    // Convert conversation ID to string for use in subsequent calls
+    const conversationId = conversation.id.toString();
+    
     // Send a regular message
     console.log('Sending regular message...');
     const regularMessage = await chatService.sendMessage(
-      conversation.id,
+      conversationId,
       user1._id.toString(),
       'Hello, this is a regular message',
       'text',
@@ -49,7 +52,7 @@ async function testAIMessages() {
     // Send an AI message
     console.log('Sending AI message...');
     const aiMessage = await chatService.sendMessage(
-      conversation.id,
+      conversationId,
       user2._id.toString(),
       'Hi! This is an AI-generated auto-reply message 🤖',
       'text',
@@ -62,7 +65,7 @@ async function testAIMessages() {
     
     // Fetch messages to verify
     console.log('Fetching messages...');
-    const messages = await chatService.getConversationMessages(conversation.id, user1._id.toString());
+    const messages = await chatService.getConversationMessages(conversationId, user1._id.toString());
     
     console.log('\nMessages in conversation:');
     messages.messages.forEach((msg, index) => {
