@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Conversation } from './conversation.schema';
 import { Message } from './message.schema';
+import { UrgentMessage } from './urgent-message.schema';
 import { User } from '../users/user.schema';
 import { CloudinaryService } from '../users/cloudinary.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -16,6 +17,7 @@ export class ChatService {
   constructor(
     @InjectModel(Conversation.name) private conversationModel: Model<Conversation>,
     @InjectModel(Message.name) private messageModel: Model<Message>,
+    @InjectModel(UrgentMessage.name) private urgentMessageModel: Model<UrgentMessage>,
     @InjectModel(User.name) private userModel: Model<User>,
     private cloudinaryService: CloudinaryService,
     private notificationsService: NotificationsService,
@@ -405,6 +407,22 @@ export class ChatService {
     if (isUrgent || aiDetectedUrgent) {
       conversation.hasUrgentMessage = true;
       conversation.urgentMessageSender = new Types.ObjectId(senderId);
+      
+      // Store urgent message in dedicated table for easy lookup
+      // Find the recipient (other participant in direct conversation)
+      const recipientId = conversation.participants.find(p => p.toString() !== senderId);
+      
+      const urgentMessageRecord = new this.urgentMessageModel({
+        conversation: new Types.ObjectId(conversationId),
+        message: message._id,
+        sender: new Types.ObjectId(senderId),
+        recipient: recipientId ? new Types.ObjectId(recipientId) : null,
+        content: content,
+        hasBeenRepliedTo: false,
+        isActive: true,
+      });
+      await urgentMessageRecord.save();
+      console.log('Urgent message stored in UrgentMessage table:', urgentMessageRecord._id);
     }
 
     // Get sender info for notification
@@ -467,9 +485,9 @@ export class ChatService {
             } : 'null');
             
             if (recipient) {
-              // Send first message notification if this is the first message in the conversation
-              if (isFirstMessage) {
-                console.log('This is the first message, sending first message notification to:', recipient.email);
+              // Send first message notification ONLY if this message is urgent/important
+              if (isFirstMessage && (isUrgent || aiDetectedUrgent)) {
+                console.log('This is the first URGENT message, sending first message notification to:', recipient.email);
                 try {
                   await this.emailService.sendFirstMessageNotification(
                     recipient.email,
@@ -478,9 +496,9 @@ export class ChatService {
                     content,
                     conversationId,
                   );
-                  console.log('First message notification sent successfully');
+                  console.log('First urgent message notification sent successfully');
                 } catch (error) {
-                  console.error('Failed to send first message notification:', error);
+                  console.error('Failed to send first urgent message notification:', error);
                 }
               }
               // Send urgent email to ALL users if message is urgent (user-marked or AI-detected)
@@ -494,20 +512,83 @@ export class ChatService {
                   conversationId,
                 );
                 console.log('Urgent email notification sent successfully');
-              } 
-              // Send regular email only to silent signup users
-              else if (recipient.isSilentSignup) {
-                console.log('Recipient is a silent signup user, sending regular email notification...');
-                await this.emailService.sendChatReplyNotification(
-                  recipient.email,
-                  recipient.displayName || recipient.name,
-                  senderName,
-                  content,
-                  conversationId,
-                );
-                console.log('Regular email notification sent successfully');
-              } else {
-                console.log('Recipient is NOT a silent signup user and message is not urgent, skipping email');
+              }
+              // Check if this conversation has any active urgent messages that haven't been replied to
+              // If so, notify the original urgent sender for ANY reply (regardless of reply urgency)
+              else {
+                console.log('Checking if conversation has active urgent messages...');
+                console.log('Current sender ID:', senderId);
+                console.log('Conversation ID:', conversationId);
+                
+                // First, let's see all urgent messages in this conversation for debugging
+                const allUrgentInConversation = await this.urgentMessageModel.find({
+                  conversation: new Types.ObjectId(conversationId),
+                }).populate('sender', 'name displayName email').populate('recipient', 'name displayName email');
+                
+                console.log(`Found ${allUrgentInConversation.length} urgent messages in this conversation:`);
+                allUrgentInConversation.forEach((msg, index) => {
+                  console.log(`  ${index + 1}. Sender: ${(msg.sender as any)?.name} (${msg.sender})`);
+                  console.log(`     Recipient: ${(msg.recipient as any)?.name} (${msg.recipient})`);
+                  console.log(`     HasBeenRepliedTo: ${msg.hasBeenRepliedTo}, IsActive: ${msg.isActive}`);
+                  console.log(`     Current sender matches recipient: ${msg.recipient?.toString() === senderId}`);
+                });
+                
+                // Look up active urgent messages in this conversation where current sender is the recipient
+                const activeUrgentMessage = await this.urgentMessageModel.findOne({
+                  conversation: new Types.ObjectId(conversationId),
+                  recipient: new Types.ObjectId(senderId), // Only get urgent messages where current sender is the recipient
+                  hasBeenRepliedTo: false,
+                  isActive: true,
+                }).populate('sender', 'name displayName email').sort({ createdAt: 1 }); // Get the first active urgent message
+                
+                if (activeUrgentMessage) {
+                  console.log('Found active urgent message where current sender is the recipient');
+                  console.log('Original urgent sender:', (activeUrgentMessage.sender as any).email);
+                  console.log('Current sender (recipient replying):', senderId);
+                  console.log('Sending reply notification to original urgent message sender...');
+                  
+                  await this.emailService.sendUrgentReplyNotification(
+                    (activeUrgentMessage.sender as any).email,
+                    (activeUrgentMessage.sender as any).displayName || (activeUrgentMessage.sender as any).name,
+                    senderName,
+                    content,
+                    activeUrgentMessage.content,
+                    conversationId,
+                  );
+                  
+                  // Mark the urgent message as replied to
+                  activeUrgentMessage.hasBeenRepliedTo = true;
+                  await activeUrgentMessage.save();
+                  
+                  console.log('Urgent reply notification sent successfully and urgent message marked as replied');
+                } else {
+                  console.log('No active urgent messages found where current sender is the recipient');
+                }
+              }
+              // Send regular email only to silent signup users (for non-urgent, non-first messages)
+              if (recipient.isSilentSignup && !isFirstMessage && !(isUrgent || aiDetectedUrgent)) {
+                // Check if this is not a reply to an urgent message
+                const hasActiveUrgentMessage = await this.urgentMessageModel.findOne({
+                  conversation: new Types.ObjectId(conversationId),
+                  hasBeenRepliedTo: false,
+                  isActive: true,
+                });
+                
+                if (!hasActiveUrgentMessage) {
+                  console.log('Recipient is a silent signup user, sending regular email notification...');
+                  await this.emailService.sendChatReplyNotification(
+                    recipient.email,
+                    recipient.displayName || recipient.name,
+                    senderName,
+                    content,
+                    conversationId,
+                  );
+                  console.log('Regular email notification sent successfully');
+                } else {
+                  console.log('Conversation has active urgent messages, skipping regular email for silent signup user');
+                }
+              } else if (!isFirstMessage && !(isUrgent || aiDetectedUrgent) && !recipient.isSilentSignup) {
+                console.log('Message is not urgent, not first message, and recipient is not silent signup - skipping email');
               }
             } else {
               console.log('Recipient not found, skipping email');
@@ -696,6 +777,18 @@ export class ChatService {
     // Clear hasUrgentMessage flag and sender when messages are read
     conversation.hasUrgentMessage = false;
     conversation.urgentMessageSender = undefined;
+    
+    // Mark all urgent messages in this conversation as replied to (since user is reading)
+    await this.urgentMessageModel.updateMany(
+      {
+        conversation: new Types.ObjectId(conversationId),
+        hasBeenRepliedTo: false,
+        isActive: true,
+      },
+      {
+        hasBeenRepliedTo: true,
+      }
+    );
     
     await conversation.save();
 

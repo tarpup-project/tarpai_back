@@ -18,7 +18,10 @@
     "search-text": "ts-node src/scripts/search-text.ts",
     "migrate-bios": "ts-node src/scripts/migrate-bios.ts",
     "delete-recent-users": "ts-node src/scripts/delete-recent-users.ts",
-    "delete-users-by-username": "ts-node src/scripts/delete-users-by-username.ts"
+    "delete-users-by-username": "ts-node src/scripts/delete-users-by-username.ts",
+    "fix-urgent-messages-recipients": "ts-node src/scripts/fix-urgent-messages-recipients.ts",
+    "check-urgent-messages": "ts-node src/scripts/check-urgent-messages.ts",
+    "reset-urgent-message": "ts-node src/scripts/reset-urgent-message.ts"
   },
   "repository": {
     "type": "git",

@@ -9,6 +9,7 @@ import { AiService } from './ai.service';
 import { LinkPreviewService } from './link-preview.service';
 import { Conversation, ConversationSchema } from './conversation.schema';
 import { Message, MessageSchema } from './message.schema';
+import { UrgentMessage, UrgentMessageSchema } from './urgent-message.schema';
 import { User, UserSchema } from '../users/user.schema';
 import { CloudinaryService } from '../users/cloudinary.service';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -19,6 +20,7 @@ import { EmailService } from '../auth/email.service';
     MongooseModule.forFeature([
       { name: Conversation.name, schema: ConversationSchema },
       { name: Message.name, schema: MessageSchema },
+      { name: UrgentMessage.name, schema: UrgentMessageSchema },
       { name: User.name, schema: UserSchema },
     ]),
     JwtModule.registerAsync({

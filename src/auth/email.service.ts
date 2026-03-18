@@ -683,6 +683,105 @@ export class EmailService {
     }
   }
 
+  async sendUrgentReplyNotification(
+    originalSenderEmail: string,
+    originalSenderName: string,
+    replierName: string,
+    replyContent: string,
+    originalMessageContent: string,
+    conversationId: string,
+  ) {
+    console.log('=== sendUrgentReplyNotification called ===');
+    console.log('Original Sender Email:', originalSenderEmail);
+    console.log('Original Sender Name:', originalSenderName);
+    console.log('Replier Name:', replierName);
+    console.log('Reply Content:', replyContent);
+    
+    if (!this.transporter) {
+      console.log('Email not configured. Urgent reply notification not sent.');
+      return;
+    }
+
+    const backendUrl = this.configService.get<string>('BACKEND_URL') || 'http://localhost:3000';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+    const chatUrl = `${frontendUrl}/chat/${conversationId}`;
+    const googleAuthUrl = `${backendUrl}/auth/google`;
+
+    const emailFrom = this.configService.get<string>('EMAIL_FROM') || 'noreply@tarpai.com';
+    
+    const mailOptions = {
+      from: emailFrom,
+      to: originalSenderEmail,
+      subject: `✅ ${replierName} replied to your urgent message on TarpUp`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0;">✅ Reply Received</h1>
+          </div>
+          
+          <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 3px solid #28a745;">
+            <h2 style="color: #333; margin-top: 0;">Hi ${originalSenderName}! 🎉</h2>
+            
+            <p style="color: #666; font-size: 16px; line-height: 1.6;">
+              Great news! <strong>${replierName}</strong> replied to your urgent message:
+            </p>
+            
+            <div style="background: #e8f5e8; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #28a745;">
+              <p style="color: #155724; margin: 0; font-size: 14px; font-weight: 500;">
+                📩 Your original urgent message:
+              </p>
+              <p style="color: #333; margin: 10px 0 0 0; font-style: italic;">
+                "${originalMessageContent.length > 100 ? originalMessageContent.substring(0, 100) + '...' : originalMessageContent}"
+              </p>
+            </div>
+            
+            <div style="background: white; padding: 20px; border-left: 4px solid #28a745; margin: 20px 0; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+              <p style="color: #155724; margin: 0 0 10px 0; font-size: 14px; font-weight: 500;">
+                💬 ${replierName}'s reply:
+              </p>
+              <p style="color: #333; margin: 0; font-size: 16px;">
+                "${replyContent.length > 200 ? replyContent.substring(0, 200) + '...' : replyContent}"
+              </p>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${chatUrl}" style="background: #28a745; color: white; padding: 15px 40px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold; font-size: 16px;">
+                Continue Conversation
+              </a>
+            </div>
+            
+            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+            
+            <div style="background: #fff; padding: 20px; border-radius: 5px; text-align: center;">
+              <p style="color: #666; margin-bottom: 15px;">
+                Not signed in? Access your messages instantly with Google
+              </p>
+              <a href="${googleAuthUrl}" style="background: white; color: #333; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; border: 2px solid #ddd; font-weight: 500;">
+                <img src="https://www.google.com/favicon.ico" alt="Google" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 8px;">
+                Sign in with Google
+              </a>
+            </div>
+            
+            <p style="color: #999; font-size: 12px; text-align: center; margin-top: 30px;">
+              You're receiving this because someone replied to your urgent message on TarpUp.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    console.log('Attempting to send urgent reply notification email...');
+    
+    try {
+      const result = await this.transporter.sendMail(mailOptions);
+      console.log('Urgent reply notification sent successfully to:', originalSenderEmail);
+      console.log('Email send result:', result);
+    } catch (error) {
+      console.error('Error sending urgent reply notification:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+    }
+  }
+
   async sendBroadcastNotification(
     recipientEmail: string,
     recipientName: string,
