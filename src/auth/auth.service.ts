@@ -498,22 +498,6 @@ export class AuthService {
       statusId
     );
 
-    // Send notification email to the existing user (profile owner) if action is chat-related
-    if (action === 'chat' || action === 'follow') {
-      try {
-        await this.emailService.sendChatRequestNotification(
-          profileUser.email,
-          profileUser.displayName || profileUser.name,
-          name,
-          email
-        );
-        console.log('Chat request notification sent to profile user:', profileUser.email);
-      } catch (error) {
-        console.error('Failed to send chat request notification:', error);
-        // Don't fail the main flow if notification fails
-      }
-    }
-
     return {
       message: 'Verification email sent. Please check your email to complete the action.',
       email: user.email,
@@ -622,22 +606,6 @@ export class AuthService {
         }
       }
       
-      // Send notification to profile user for chat-related actions
-      if (action === 'chat' || action === 'follow') {
-        try {
-          await this.emailService.sendChatRequestNotification(
-            profileUser.email,
-            profileUser.displayName || profileUser.name,
-            user.displayName || user.name,
-            user.email
-          );
-          console.log('Chat request notification sent to profile user:', profileUser.email);
-        } catch (error) {
-          console.error('Failed to send chat request notification:', error);
-          // Don't fail the main flow if notification fails
-        }
-      }
-      
       return {
         token: jwtToken,
         user: {
@@ -678,22 +646,6 @@ export class AuthService {
       action as any,
       profileUsername,
     );
-
-    // Send notification to profile user for chat-related actions
-    if (action === 'chat' || action === 'follow') {
-      try {
-        await this.emailService.sendChatRequestNotification(
-          profileUser.email,
-          profileUser.displayName || profileUser.name,
-          user.displayName || user.name,
-          user.email
-        );
-        console.log('Chat request notification sent to profile user:', profileUser.email);
-      } catch (error) {
-        console.error('Failed to send chat request notification:', error);
-        // Don't fail the main flow if notification fails
-      }
-    }
 
     return {
       message: 'Login link sent to your email',

@@ -378,7 +378,7 @@ export class ChatService {
     console.log('Message count in conversation:', messageCount);
 
     // Notification logic:
-    // - If first message is urgent: Send emails for first 3 messages, then only urgent
+    // - If first message is urgent: Send emails for first 2 messages, then only urgent
     // - If first message is NOT urgent: Only send emails for urgent messages from the start
     let shouldSendEmailNotification = false;
     
@@ -395,8 +395,8 @@ export class ChatService {
     } else {
       // For subsequent messages, check the pattern set by first message
       if (conversation.firstMessageWasUrgent) {
-        // First message was urgent, so send emails for first 3 messages, then only urgent
-        shouldSendEmailNotification = messageCount <= 3 || isUrgent || aiDetectedUrgent;
+        // First message was urgent, so send emails for first 2 messages, then only urgent
+        shouldSendEmailNotification = messageCount <= 2 || isUrgent || aiDetectedUrgent;
       } else {
         // First message was not urgent, so only send emails for urgent messages
         shouldSendEmailNotification = isUrgent || aiDetectedUrgent;
@@ -507,8 +507,8 @@ export class ChatService {
                   } catch (error) {
                     console.error('Failed to send email notification:', error);
                   }
-                } else if (conversation.firstMessageWasUrgent && messageCount <= 3) {
-                  console.log(`First message was urgent, this is message #${messageCount} (within first 3), sending email notification to:`, recipient.email);
+                } else if (conversation.firstMessageWasUrgent && messageCount <= 2) {
+                  console.log(`First message was urgent, this is message #${messageCount} (within first 2), sending email notification to:`, recipient.email);
                   try {
                     await this.emailService.sendChatReplyNotification(
                       recipient.email,
@@ -517,7 +517,7 @@ export class ChatService {
                       content,
                       conversationId,
                     );
-                    console.log('Email notification sent successfully (first message was urgent, within first 3)');
+                    console.log('Email notification sent successfully (first message was urgent, within first 2)');
                   } catch (error) {
                     console.error('Failed to send email notification:', error);
                   }
@@ -536,7 +536,7 @@ export class ChatService {
                 if (conversation.firstMessageWasUrgent === false) {
                   console.log(`First message was NOT urgent, message #${messageCount} is also not urgent, skipping email notification`);
                 } else {
-                  console.log(`Message #${messageCount} is not urgent and past first 3 messages, skipping email notification`);
+                  console.log(`Message #${messageCount} is not urgent and past first 2 messages, skipping email notification`);
                 }
               }
 

@@ -1,7 +1,7 @@
 import { createConnection, Connection } from 'mongoose';
 
 // Database connection
-const DB_URL = process.env.MONGODB_URI || 'mongodb+srv://tarpai:Jumong25@henrycluster.cimmklx.mongodb.net/nestjs_db?retryWrites=true&w=majority';
+const DB_URL = process.env.MONGODB_URI || 'mongodb+srv://travorproject:sleKHyeZp2htHzbw@cluster0.lsyy8.mongodb.net/project?retryWrites=true&w=majority';
 
 interface UserToDelete {
   _id: any;
@@ -15,7 +15,7 @@ interface UserToDelete {
 // List of usernames to delete - MODIFY THIS ARRAY
 const USERNAMES_TO_DELETE = [
   // Add usernames here, for example:
-  'adostaff',
+  'ado123',
 ];
 
 async function deleteUsersByUsername() {
