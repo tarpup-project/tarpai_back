@@ -23,7 +23,10 @@
     "check-urgent-messages": "ts-node src/scripts/check-urgent-messages.ts",
     "test-conversation-cleanup": "ts-node src/scripts/test-conversation-cleanup.ts",
     "test-ai-messages": "ts-node src/scripts/test-ai-messages.ts",
-    "reset-urgent-message": "ts-node src/scripts/reset-urgent-message.ts"
+    "reset-urgent-message": "ts-node src/scripts/reset-urgent-message.ts",
+    "create-admin-user": "ts-node src/scripts/create-admin-user.ts",
+    "check-admin-user": "ts-node src/scripts/check-admin-user.ts",
+    "update-admin-password": "ts-node src/scripts/update-admin-password.ts"
   },
   "repository": {
     "type": "git",

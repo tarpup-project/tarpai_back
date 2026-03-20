@@ -9,6 +9,19 @@ export class Broadcast extends Document {
   @Prop({ required: true, maxlength: 500 })
   message: string;
 
+  // Rich message structure for admin broadcasts
+  @Prop({ maxlength: 100 })
+  title?: string;
+
+  @Prop({ maxlength: 200 })
+  actionUrl?: string;
+
+  @Prop({ maxlength: 50 })
+  actionLabel?: string;
+
+  @Prop({ default: false })
+  isRichMessage: boolean;
+
   @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }] })
   recipients: Types.ObjectId[];
 

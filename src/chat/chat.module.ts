@@ -16,6 +16,7 @@ import { User, UserSchema } from '../users/user.schema';
 import { CloudinaryService } from '../users/cloudinary.service';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EmailService } from '../auth/email.service';
+import { AnalyticsModule } from '../analytics/analytics.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { EmailService } from '../auth/email.service';
     }),
     ScheduleModule.forRoot(),
     NotificationsModule,
+    AnalyticsModule,
   ],
   controllers: [ChatController],
   providers: [ChatService, ChatGateway, ChatCleanupService, CloudinaryService, EmailService, AiService, LinkPreviewService],

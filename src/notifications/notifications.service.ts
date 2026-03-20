@@ -15,6 +15,7 @@ export class NotificationsService {
     senderId: string,
     recipientIds: string[],
     message: string,
+    richMessage?: { title?: string; actionUrl?: string; actionLabel?: string },
   ) {
     // Fetch sender's name
     const sender = await this.userModel.findById(senderId);
@@ -24,8 +25,10 @@ export class NotificationsService {
       recipient: new Types.ObjectId(recipientId),
       sender: new Types.ObjectId(senderId),
       type: NotificationType.BROADCAST,
-      title: `Broadcast from ${senderName}`,
+      title: richMessage?.title || `Broadcast from ${senderName}`,
       message,
+      ...(richMessage?.actionUrl && { actionUrl: richMessage.actionUrl }),
+      ...(richMessage?.actionLabel && { actionLabel: richMessage.actionLabel }),
       isRead: false,
     }));
 

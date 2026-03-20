@@ -11,6 +11,7 @@ import { ChatGateway } from './chat.gateway';
 import { EmailService } from '../auth/email.service';
 import { AiService } from './ai.service';
 import { LinkPreviewService } from './link-preview.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 
 @Injectable()
 export class ChatService {
@@ -26,6 +27,7 @@ export class ChatService {
     private emailService: EmailService,
     private aiService: AiService,
     private linkPreviewService: LinkPreviewService,
+    private analyticsService: AnalyticsService,
   ) {}
 
   async createConversation(userId: string, participantId: string) {
@@ -338,9 +340,16 @@ export class ChatService {
 
     // Check if message is urgent using AI (only for text messages)
     let aiDetectedUrgent = false;
+    let urgencyKeywords: string[] = [];
     if (type === 'text' && content && content.trim().length > 0) {
-      aiDetectedUrgent = await this.aiService.isMessageUrgent(content);
+      const urgencyResult = await this.aiService.isMessageUrgent(content);
+      aiDetectedUrgent = urgencyResult.isUrgent;
+      urgencyKeywords = urgencyResult.keywords;
       console.log('Message urgency check:', aiDetectedUrgent ? 'URGENT' : 'NORMAL');
+      
+      if (urgencyKeywords.length > 0) {
+        console.log('Detected urgency keywords:', urgencyKeywords);
+      }
     }
 
     const messageData: any = {
@@ -368,6 +377,31 @@ export class ChatService {
     const message = new this.messageModel(messageData);
 
     await message.save();
+
+    // Track important message if it was detected as urgent
+    if ((isUrgent || aiDetectedUrgent) && !isAI) {
+      try {
+        // Get recipient ID from conversation participants
+        const recipientId = conversation.participants.find(p => p.toString() !== senderId);
+        
+        if (recipientId) {
+          await this.analyticsService.trackImportantMessage(
+            message._id.toString(),
+            senderId,
+            recipientId.toString(),
+            content || '',
+            urgencyKeywords,
+            aiDetectedUrgent ? 'ai_detected' : 'manual',
+            false, // emailSent - will be updated later if email is sent
+            false  // autoReplyGenerated - will be updated later if auto-reply is generated
+          );
+          console.log('Important message tracked in analytics');
+        }
+      } catch (error) {
+        console.error('Failed to track important message:', error);
+        // Don't fail the message sending if analytics tracking fails
+      }
+    }
 
     // Check message count for this conversation to determine notification logic
     const messageCount = await this.messageModel.countDocuments({

@@ -15,6 +15,8 @@ import { StatusModule } from './status/status.module';
 import { SupportModule } from './support/support.module';
 import { ChatModule } from './chat/chat.module';
 import { AIModule } from './ai/ai.module';
+import { AdminModule } from './admin/admin.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -40,6 +42,8 @@ import { AIModule } from './ai/ai.module';
     SupportModule,
     ChatModule,
     AIModule,
+    AdminModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

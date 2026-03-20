@@ -6,7 +6,9 @@ import OpenAI from 'openai';
 export class AiService {
   private openai: OpenAI | null = null;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+  ) {
     const apiKey = this.configService.get<string>('OPENROUTER_API_KEY');
     
     if (apiKey && apiKey !== 'your_openrouter_api_key_here') {
@@ -24,12 +26,13 @@ export class AiService {
     }
   }
 
-  async isMessageUrgent(messageContent: string): Promise<boolean> {
+  async isMessageUrgent(messageContent: string): Promise<{ isUrgent: boolean; keywords: string[] }> {
     if (!messageContent || messageContent.trim().length === 0) {
-      return false;
+      return { isUrgent: false, keywords: [] };
     }
 
     const lowerMessage = messageContent.toLowerCase();
+    const detectedKeywords: string[] = [];
     
     // Emergency situations
     const emergencyKeywords = [
@@ -65,11 +68,14 @@ export class AiService {
       'lost passport', 'missed deadline'
     ];
     
+    let isUrgent = false;
+    
     // Check for emergency keywords
     for (const keyword of emergencyKeywords) {
       if (lowerMessage.includes(keyword)) {
         console.log('Message contains emergency keyword, marking as URGENT');
-        return true;
+        detectedKeywords.push(keyword);
+        isUrgent = true;
       }
     }
     
@@ -77,7 +83,8 @@ export class AiService {
     for (const keyword of timeSensitiveKeywords) {
       if (lowerMessage.includes(keyword)) {
         console.log('Message contains time-sensitive keyword, marking as URGENT');
-        return true;
+        detectedKeywords.push(keyword);
+        isUrgent = true;
       }
     }
     
@@ -85,7 +92,8 @@ export class AiService {
     for (const event of importantEvents) {
       if (lowerMessage.includes(event)) {
         console.log('Message contains important event keyword, marking as URGENT');
-        return true;
+        detectedKeywords.push(event);
+        isUrgent = true;
       }
     }
     
@@ -93,7 +101,8 @@ export class AiService {
     for (const meeting of criticalMeetings) {
       if (lowerMessage.includes(meeting)) {
         console.log('Message contains critical meeting keyword, marking as URGENT');
-        return true;
+        detectedKeywords.push(meeting);
+        isUrgent = true;
       }
     }
     
@@ -101,12 +110,16 @@ export class AiService {
     for (const action of immediateActions) {
       if (lowerMessage.includes(action)) {
         console.log('Message contains immediate action keyword, marking as URGENT');
-        return true;
+        detectedKeywords.push(action);
+        isUrgent = true;
       }
     }
     
-    console.log('Message does not contain urgency indicators, marking as NOT URGENT');
-    return false;
+    if (!isUrgent) {
+      console.log('Message does not contain urgency indicators, marking as NOT URGENT');
+    }
+    
+    return { isUrgent, keywords: detectedKeywords };
   }
     async shouldAutoReply(messageContent: string): Promise<boolean> {
       if (!messageContent || messageContent.trim().length === 0) {
@@ -116,8 +129,8 @@ export class AiService {
       const lowerContent = messageContent.toLowerCase();
 
       // Check if message is urgent first - don't auto-reply to urgent messages
-      const isUrgent = await this.isMessageUrgent(messageContent);
-      if (isUrgent) {
+      const urgencyResult = await this.isMessageUrgent(messageContent);
+      if (urgencyResult.isUrgent) {
         console.log('Message is urgent, skipping auto-reply');
         return false;
       }

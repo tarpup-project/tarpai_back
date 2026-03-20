@@ -15,13 +15,25 @@ export class BroadcastsService {
     private emailService: EmailService,
   ) {}
 
-  async sendBroadcast(userId: string, message: string) {
+  async sendBroadcast(userId: string, message: string, richMessage?: { title?: string; actionUrl?: string; actionLabel?: string }) {
     if (!message || message.trim().length === 0) {
       throw new BadRequestException('Message cannot be empty');
     }
 
     if (message.length > 500) {
       throw new BadRequestException('Message cannot exceed 500 characters');
+    }
+
+    if (richMessage?.title && richMessage.title.length > 100) {
+      throw new BadRequestException('Title cannot exceed 100 characters');
+    }
+
+    if (richMessage?.actionUrl && richMessage.actionUrl.length > 200) {
+      throw new BadRequestException('Action URL cannot exceed 200 characters');
+    }
+
+    if (richMessage?.actionLabel && richMessage.actionLabel.length > 50) {
+      throw new BadRequestException('Action label cannot exceed 50 characters');
     }
 
     const user = await this.userModel.findById(userId);
@@ -57,6 +69,10 @@ export class BroadcastsService {
     const broadcast = new this.broadcastModel({
       sender: userId,
       message: message.trim(),
+      title: richMessage?.title?.trim(),
+      actionUrl: richMessage?.actionUrl?.trim(),
+      actionLabel: richMessage?.actionLabel?.trim(),
+      isRichMessage: !!richMessage && (!!richMessage.title || !!richMessage.actionUrl || !!richMessage.actionLabel),
       recipients: user.followers,
       recipientCount: user.followers.length,
     });
@@ -78,6 +94,7 @@ export class BroadcastsService {
       userId,
       recipientIds,
       message.trim(),
+      richMessage,
     );
 
     // Send email notifications to all followers
@@ -114,13 +131,25 @@ export class BroadcastsService {
     };
   }
 
-  async sendBroadcastToSelected(userId: string, message: string, userIds: string[]) {
+  async sendBroadcastToSelected(userId: string, message: string, userIds: string[], richMessage?: { title?: string; actionUrl?: string; actionLabel?: string }) {
     if (!message || message.trim().length === 0) {
       throw new BadRequestException('Message cannot be empty');
     }
 
     if (message.length > 500) {
       throw new BadRequestException('Message cannot exceed 500 characters');
+    }
+
+    if (richMessage?.title && richMessage.title.length > 100) {
+      throw new BadRequestException('Title cannot exceed 100 characters');
+    }
+
+    if (richMessage?.actionUrl && richMessage.actionUrl.length > 200) {
+      throw new BadRequestException('Action URL cannot exceed 200 characters');
+    }
+
+    if (richMessage?.actionLabel && richMessage.actionLabel.length > 50) {
+      throw new BadRequestException('Action label cannot exceed 50 characters');
     }
 
     if (!userIds || userIds.length === 0) {
@@ -165,6 +194,10 @@ export class BroadcastsService {
     const broadcast = new this.broadcastModel({
       sender: userId,
       message: message.trim(),
+      title: richMessage?.title?.trim(),
+      actionUrl: richMessage?.actionUrl?.trim(),
+      actionLabel: richMessage?.actionLabel?.trim(),
+      isRichMessage: !!richMessage && (!!richMessage.title || !!richMessage.actionUrl || !!richMessage.actionLabel),
       recipients: validRecipients,
       recipientCount: validRecipients.length,
     });
@@ -185,6 +218,7 @@ export class BroadcastsService {
       userId,
       validRecipients,
       message.trim(),
+      richMessage,
     );
 
     // Send email notifications to selected followers
@@ -241,6 +275,133 @@ export class BroadcastsService {
     return {
       count: broadcasts.length,
       broadcasts,
+    };
+  }
+
+  async sendAdminBroadcast(adminUserId: string, message: string, richMessage?: { title?: string; actionUrl?: string; actionLabel?: string }, userIds?: string[]) {
+    if (!message || message.trim().length === 0) {
+      throw new BadRequestException('Message cannot be empty');
+    }
+
+    if (message.length > 500) {
+      throw new BadRequestException('Message cannot exceed 500 characters');
+    }
+
+    if (richMessage?.title && richMessage.title.length > 100) {
+      throw new BadRequestException('Title cannot exceed 100 characters');
+    }
+
+    if (richMessage?.actionUrl && richMessage.actionUrl.length > 200) {
+      throw new BadRequestException('Action URL cannot exceed 200 characters');
+    }
+
+    if (richMessage?.actionLabel && richMessage.actionLabel.length > 50) {
+      throw new BadRequestException('Action label cannot exceed 50 characters');
+    }
+
+    const adminUser = await this.userModel.findById(adminUserId);
+    
+    // Verify admin privileges (check if user is admin)
+    const adminEmail = 'travorproject@gmail.com';
+    if (adminUser.email !== adminEmail) {
+      throw new BadRequestException('Admin privileges required');
+    }
+
+    let recipients: string[];
+    let recipientCount: number;
+
+    if (userIds && userIds.length > 0) {
+      // Send to selected users
+      recipients = userIds;
+      recipientCount = userIds.length;
+    } else {
+      // Send to all users (admin broadcast)
+      const allUsers = await this.userModel.find({}, '_id').lean();
+      recipients = allUsers.map(user => user._id.toString());
+      recipientCount = recipients.length;
+    }
+
+    if (recipientCount === 0) {
+      throw new BadRequestException('No users found to broadcast to');
+    }
+
+    const broadcast = new this.broadcastModel({
+      sender: adminUserId,
+      message: message.trim(),
+      title: richMessage?.title?.trim(),
+      actionUrl: richMessage?.actionUrl?.trim(),
+      actionLabel: richMessage?.actionLabel?.trim(),
+      isRichMessage: !!richMessage && (!!richMessage.title || !!richMessage.actionUrl || !!richMessage.actionLabel),
+      recipients: recipients,
+      recipientCount: recipientCount,
+    });
+
+    await broadcast.save();
+
+    // Create notifications for all recipients
+    await this.notificationsService.createBroadcastNotification(
+      adminUserId,
+      recipients,
+      message.trim(),
+      richMessage,
+    );
+
+    // Send email notifications to all recipients
+    const recipientUsers = await this.userModel.find({ _id: { $in: recipients } }).select('email name displayName');
+    const senderDisplayName = adminUser.displayName || adminUser.name;
+    const senderUsername = adminUser.username;
+
+    // Send emails in parallel (don't wait for all to complete)
+    Promise.all(
+      recipientUsers.map(recipient => 
+        this.emailService.sendBroadcastNotification(
+          recipient.email,
+          recipient.displayName || recipient.name,
+          senderDisplayName,
+          senderUsername,
+          message.trim(),
+        ).catch(err => {
+          console.error(`Failed to send broadcast email to ${recipient.email}:`, err);
+        })
+      )
+    ).catch(err => {
+      console.error('Error sending broadcast emails:', err);
+    });
+
+    return {
+      message: 'Admin broadcast sent successfully',
+      recipientCount: recipientCount,
+      broadcast: {
+        id: broadcast._id,
+        message: broadcast.message,
+        title: broadcast.title,
+        actionUrl: broadcast.actionUrl,
+        actionLabel: broadcast.actionLabel,
+        isRichMessage: broadcast.isRichMessage,
+        createdAt: broadcast.createdAt,
+      },
+    };
+  }
+
+  async deleteBroadcast(broadcastId: string, userId: string) {
+    const broadcast = await this.broadcastModel.findById(broadcastId);
+    
+    if (!broadcast) {
+      throw new BadRequestException('Broadcast not found');
+    }
+
+    // Check if user is the sender or admin
+    const user = await this.userModel.findById(userId);
+    const adminEmail = 'travorproject@gmail.com';
+    
+    if (broadcast.sender.toString() !== userId && user.email !== adminEmail) {
+      throw new BadRequestException('You can only delete your own broadcasts or admin can delete any broadcast');
+    }
+
+    await this.broadcastModel.findByIdAndDelete(broadcastId);
+    
+    return {
+      message: 'Broadcast deleted successfully',
     };
   }
 }
