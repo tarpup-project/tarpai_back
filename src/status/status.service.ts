@@ -101,7 +101,7 @@ export class StatusService implements OnModuleInit {
           select: 'name username avatar',
         },
       })
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: 1 }) // Sort oldest first for forward navigation
       .exec();
 
     return statuses.map(status => ({
@@ -147,7 +147,7 @@ export class StatusService implements OnModuleInit {
         createdAt: { $gte: twentyFourHoursAgo } // Only show statuses from last 24 hours
       })
       .populate('author', 'name username avatar')
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: 1 }) // Sort oldest first for forward navigation
       .exec();
 
     return statuses.map(status => ({
@@ -177,7 +177,7 @@ export class StatusService implements OnModuleInit {
     const statuses = await this.statusModel
       .find(query)
       .populate('author', 'name username avatar')
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: 1 }) // Sort oldest first for forward navigation
       .exec();
 
     return statuses.map(status => ({
@@ -202,7 +202,7 @@ export class StatusService implements OnModuleInit {
     const statuses = await this.statusModel
       .find({ createdAt: { $gte: twentyFourHoursAgo } }) // Only show statuses from last 24 hours
       .populate('author', 'name username avatar')
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: 1 }) // Sort oldest first for forward navigation
       .exec();
 
     return statuses.map(status => ({
