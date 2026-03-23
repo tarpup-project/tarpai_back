@@ -31,16 +31,54 @@ export class ChatService {
   ) {}
 
   async createConversation(userId: string, participantId: string) {
-    // Check if conversation already exists
-    const existingConversation = await this.conversationModel.findOne({
+    console.log('=== CREATE CONVERSATION ===');
+    console.log('User ID:', userId);
+    console.log('Participant ID:', participantId);
+    
+    // Check if conversation already exists - find ALL matching conversations
+    const existingConversations = await this.conversationModel.find({
       participants: {
         $all: [new Types.ObjectId(userId), new Types.ObjectId(participantId)],
         $size: 2,
       },
+      isActive: true,
+    }).sort({ lastActivity: -1 });
+
+    console.log('Found existing conversations:', existingConversations.length);
+    existingConversations.forEach((conv, index) => {
+      console.log(`Conversation ${index + 1}:`, {
+        id: conv._id,
+        lastActivity: conv.lastActivity,
+        participants: conv.participants.map(p => p.toString())
+      });
     });
 
-    if (existingConversation) {
-      return this.getConversation(existingConversation._id.toString(), userId);
+    if (existingConversations.length > 0) {
+      // Find the conversation with messages, or use the most recent one
+      let selectedConversation = null;
+      let maxMessages = 0;
+      
+      // Check each conversation for messages and select the one with the most messages
+      for (const conv of existingConversations) {
+        const messageCount = await this.messageModel.countDocuments({
+          conversation: conv._id,
+          isDeleted: false,
+        });
+        console.log(`Conversation ${conv._id} has ${messageCount} messages`);
+        
+        if (messageCount > maxMessages) {
+          maxMessages = messageCount;
+          selectedConversation = conv;
+        }
+      }
+      
+      // If no conversation has messages, use the most recent one
+      if (!selectedConversation) {
+        selectedConversation = existingConversations[0]; // Already sorted by lastActivity desc
+      }
+      
+      console.log('Selected conversation:', selectedConversation._id, 'with', maxMessages, 'messages');
+      return this.getConversation(selectedConversation._id.toString(), userId);
     }
 
     // Verify that both users exist
@@ -228,13 +266,22 @@ export class ChatService {
   }
 
   async getConversationMessages(conversationId: string, userId: string, page: number = 1, limit: number = 50) {
+    console.log('=== GET CONVERSATION MESSAGES ===');
+    console.log('Conversation ID:', conversationId);
+    console.log('User ID:', userId);
+    
     const conversation = await this.conversationModel.findById(conversationId);
     
     if (!conversation) {
+      console.log('Conversation not found');
       throw new NotFoundException('Conversation not found');
     }
 
+    console.log('Conversation participants:', conversation.participants.map(p => p.toString()));
+    console.log('User is participant:', conversation.participants.some(p => p.toString() === userId));
+
     if (!conversation.participants.some(p => p.toString() === userId)) {
+      console.log('User is not a participant');
       throw new ForbiddenException('You are not a participant in this conversation');
     }
 
@@ -258,6 +305,9 @@ export class ChatService {
       .skip(skip)
       .limit(limit)
       .exec();
+
+    console.log('Found messages count:', messages.length);
+    console.log('Messages:', messages.map(m => ({ id: m._id, content: m.content.substring(0, 50), sender: m.sender })));
 
     return {
       messages: messages.reverse().map(msg => ({
@@ -735,6 +785,22 @@ export class ChatService {
             if (hasBeenInactiveForAnHour) {
               console.log('User has been inactive long enough, checking if message warrants auto-reply...');
               
+              // Check if 5 minutes have passed since the last auto-reply
+              const now = new Date();
+              const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000); // 5 minutes ago
+              
+              if (conversation.lastAutoReplyAt && conversation.lastAutoReplyAt > fiveMinutesAgo) {
+                const timeUntilNextReply = Math.ceil((conversation.lastAutoReplyAt.getTime() + 5 * 60 * 1000 - now.getTime()) / 1000);
+                console.log(`🚫 Auto-reply cooldown active. Last auto-reply was at ${conversation.lastAutoReplyAt.toISOString()}`);
+                console.log(`⏰ Next auto-reply available in ${timeUntilNextReply} seconds (${Math.ceil(timeUntilNextReply / 60)} minutes)`);
+                return messageResponse;
+              } else if (conversation.lastAutoReplyAt) {
+                const timeSinceLastReply = Math.floor((now.getTime() - conversation.lastAutoReplyAt.getTime()) / 1000);
+                console.log(`✅ Cooldown expired. Last auto-reply was ${timeSinceLastReply} seconds ago (${Math.floor(timeSinceLastReply / 60)} minutes)`);
+              } else {
+                console.log('✅ No previous auto-reply found, cooldown not applicable');
+              }
+              
               // Check if message should get an auto-reply
               const shouldAutoReply = await this.aiService.shouldAutoReply(content);
               
@@ -751,6 +817,12 @@ export class ChatService {
                 );
 
                 console.log('Auto-reply generated:', autoReplyContent);
+
+                // Update the last auto-reply timestamp
+                console.log(`🤖 Updating lastAutoReplyAt to ${now.toISOString()}`);
+                await this.conversationModel.findByIdAndUpdate(conversationId, {
+                  lastAutoReplyAt: now
+                });
 
                 // Send auto-reply after a short delay (2-5 seconds to seem natural)
                 const delay = 2000 + Math.random() * 3000; // 2-5 seconds

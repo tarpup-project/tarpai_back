@@ -39,6 +39,9 @@ export class Conversation extends Document {
   @Prop({ type: Boolean })
   firstMessageWasUrgent?: boolean;
 
+  @Prop({ type: Date })
+  lastAutoReplyAt?: Date; // Track when the last AI auto-reply was sent
+
   createdAt?: Date;
   updatedAt?: Date;
 }

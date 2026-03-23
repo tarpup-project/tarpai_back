@@ -26,7 +26,11 @@
     "reset-urgent-message": "ts-node src/scripts/reset-urgent-message.ts",
     "create-admin-user": "ts-node src/scripts/create-admin-user.ts",
     "check-admin-user": "ts-node src/scripts/check-admin-user.ts",
-    "update-admin-password": "ts-node src/scripts/update-admin-password.ts"
+    "update-admin-password": "ts-node src/scripts/update-admin-password.ts",
+    "cleanup-duplicate-conversations": "ts-node src/scripts/cleanup-duplicate-conversations.ts",
+    "test-auto-reply-cooldown": "ts-node src/scripts/test-auto-reply-cooldown.ts",
+    "test-tarpai-no-scheduling": "ts-node src/scripts/test-tarpai-no-scheduling.ts",
+    "test-urgency-detection": "ts-node src/scripts/test-urgency-detection.ts"
   },
   "repository": {
     "type": "git",

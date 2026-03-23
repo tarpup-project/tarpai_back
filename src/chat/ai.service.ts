@@ -16,7 +16,7 @@ export class AiService {
         baseURL: 'https://openrouter.ai/api/v1',
         apiKey: apiKey,
         defaultHeaders: {
-          'HTTP-Referer': 'https://tarpai.onrender.com',
+          'HTTP-Referer': 'https://tarpup.ai',
           'X-Title': 'TarpAI Chat',
         },
       });
@@ -48,10 +48,31 @@ export class AiService {
       'next week', 'this week', 'next month'
     ];
     
+    // Days of the week (scheduling indicators)
+    const dayKeywords = [
+      'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+      'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'
+    ];
+    
+    // Months (scheduling indicators)
+    const monthKeywords = [
+      'january', 'february', 'march', 'april', 'may', 'june',
+      'july', 'august', 'september', 'october', 'november', 'december',
+      'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+      'jul', 'aug', 'sep', 'oct', 'nov', 'dec'
+    ];
+    
+    // Meeting/occasion keywords
+    const meetingKeywords = [
+      'meet up', 'meetup', 'meeting', 'appointment', 'date', 'hangout',
+      'get together', 'catch up', 'see you', 'lets meet', 'let\'s meet',
+      'coffee', 'lunch', 'dinner', 'drinks', 'party', 'event'
+    ];
+    
     // Important life events
     const importantEvents = [
       'wedding', 'marriage', 'funeral', 'birth', 'graduation', 'interview',
-      'appointment'
+      'appointment', 'surgery', 'court', 'legal'
     ];
     
     // Critical meetings/appointments
@@ -112,6 +133,90 @@ export class AiService {
         console.log('Message contains immediate action keyword, marking as URGENT');
         detectedKeywords.push(action);
         isUrgent = true;
+      }
+    }
+    
+    // NEW: Check for scheduling patterns (day + meeting/occasion)
+    const hasDayReference = dayKeywords.some(day => lowerMessage.includes(day));
+    const hasMonthReference = monthKeywords.some(month => lowerMessage.includes(month));
+    const hasMeetingReference = meetingKeywords.some(meeting => lowerMessage.includes(meeting));
+    
+    // Check for time patterns (e.g., "2 PM", "at 3", "10:30")
+    const timePatterns = [
+      /\b\d{1,2}:\d{2}\b/,           // 2:30, 10:45
+      /\b\d{1,2}\s?(am|pm)\b/i,     // 2 PM, 3am
+      /\bat\s?\d{1,2}\b/,           // at 2, at 10
+      /\b\d{1,2}\s?o'?clock\b/i     // 2 oclock, 3 o'clock
+    ];
+    
+    const hasTimeReference = timePatterns.some(pattern => pattern.test(lowerMessage));
+    
+    // Check for date patterns (e.g., "March 15", "15th", "next Tuesday")
+    const datePatterns = [
+      /\b\d{1,2}(st|nd|rd|th)\b/,   // 15th, 22nd, 3rd
+      /\b\d{1,2}\/\d{1,2}\b/,       // 3/15, 12/25
+      /\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+      /\bthis\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i
+    ];
+    
+    const hasDateReference = datePatterns.some(pattern => pattern.test(lowerMessage));
+    
+    // Check for future-oriented language that suggests planning/scheduling
+    const schedulingVerbs = [
+      'let\'s', 'lets', 'can we', 'shall we', 'would you', 'are you free',
+      'are you available', 'want to', 'wanna', 'should we', 'how about'
+    ];
+    
+    const hasSchedulingLanguage = schedulingVerbs.some(verb => lowerMessage.includes(verb));
+    
+    // If message contains scheduling elements (day/date/time + meeting/occasion), mark as urgent
+    if ((hasDayReference || hasMonthReference || hasDateReference || hasTimeReference) && hasMeetingReference) {
+      console.log('Message contains scheduling pattern (date/time + meeting/occasion), marking as URGENT');
+      detectedKeywords.push('scheduling_pattern');
+      isUrgent = true;
+    }
+    
+    // Also check for scheduling inquiries with future-oriented language
+    if ((hasDayReference || hasDateReference) && hasSchedulingLanguage) {
+      console.log('Message contains scheduling inquiry pattern, marking as URGENT');
+      detectedKeywords.push('scheduling_inquiry');
+      isUrgent = true;
+    }
+    
+    // Exclude casual past references that shouldn't be urgent
+    const pastTenseIndicators = [
+      'had', 'was', 'were', 'went', 'did', 'yesterday', 'last week', 'last month',
+      'ago', 'before', 'earlier', 'previously'
+    ];
+    
+    const hasPastReference = pastTenseIndicators.some(past => lowerMessage.includes(past));
+    
+    // Exclude casual present references that shouldn't be urgent (weather, general statements)
+    const casualPresentIndicators = [
+      'weather', 'nice', 'beautiful', 'sunny', 'rainy', 'cold', 'hot',
+      'feeling', 'love', 'like', 'enjoy', 'think', 'believe'
+    ];
+    
+    const hasCasualReference = casualPresentIndicators.some(casual => lowerMessage.includes(casual));
+    
+    // If it's a past reference or casual statement without scheduling language, don't mark time-sensitive words as urgent
+    if ((hasPastReference || hasCasualReference) && !hasSchedulingLanguage && !hasMeetingReference) {
+      // Remove time-sensitive keywords that were detected for past events or casual statements
+      const timeKeywordsToRemove = ['today', 'this morning', 'this afternoon', 'this evening'];
+      for (const keyword of timeKeywordsToRemove) {
+        if (detectedKeywords.includes(keyword) && lowerMessage.includes(keyword)) {
+          const index = detectedKeywords.indexOf(keyword);
+          if (index > -1) {
+            detectedKeywords.splice(index, 1);
+            console.log(`Removed '${keyword}' from urgent keywords due to ${hasPastReference ? 'past tense' : 'casual'} context`);
+          }
+        }
+      }
+      
+      // If no other urgent keywords remain, mark as not urgent
+      if (detectedKeywords.length === 0) {
+        isUrgent = false;
+        console.log(`Message contains ${hasPastReference ? 'past tense' : 'casual'} reference, removing urgency`);
       }
     }
     

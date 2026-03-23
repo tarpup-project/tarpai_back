@@ -5,7 +5,6 @@ import { Model, Types } from 'mongoose';
 import OpenAI from 'openai';
 import { AIConversation, AIMessage } from './ai-conversation.schema';
 import { User } from '../users/user.schema';
-import { ReminderService } from './reminder.service';
 
 @Injectable()
 export class AIChatService {
@@ -15,7 +14,6 @@ export class AIChatService {
     @InjectModel(AIConversation.name) private aiConversationModel: Model<AIConversation>,
     @InjectModel(User.name) private userModel: Model<User>,
     private configService: ConfigService,
-    private reminderService: ReminderService,
   ) {
     const apiKey = this.configService.get<string>('OPENROUTER_API_KEY');
     
@@ -24,7 +22,7 @@ export class AIChatService {
         baseURL: 'https://openrouter.ai/api/v1',
         apiKey: apiKey,
         defaultHeaders: {
-          'HTTP-Referer': 'https://tarpai.onrender.com',
+          'HTTP-Referer': 'https://tarpup.ai',
           'X-Title': 'TarpAI Assistant',
         },
       });
@@ -50,49 +48,41 @@ export class AIChatService {
         messages: [
           {
             role: 'system',
-            content: `You are TarpAI, a specialized AI assistant integrated into the TarpAI social platform. You ONLY help users with these specific tasks:
+            content: `You are TarpAI, a messaging assistant that helps users communicate with people across platforms. You're integrated into the TarpAI social platform to facilitate better connections and communication.
 
-ALLOWED TASKS:
-- Creating reminders and email notifications for important events
-- Answering questions about the TarpAI platform features and functionality
-- Helping users find other users by searching for usernames or display names
-- Basic troubleshooting of platform issues
-- Account-related questions and guidance
-- Explaining how TarpAI features work (messaging, profiles, status updates, etc.)
+WHAT YOU CAN HELP WITH:
+- Helping users find and connect with other people on TarpAI
+- Answering questions about messaging features and communication tools
+- Explaining how to use TarpAI's social features (profiles, status updates, messaging, etc.)
+- Providing guidance on cross-platform communication and networking
+- Basic troubleshooting of messaging and platform issues
+- Account-related questions and communication settings
 
-STRICTLY FORBIDDEN - You MUST refuse these requests:
+WHAT YOU CANNOT DO:
 - Writing code, scripts, or programming solutions
 - Complex technical explanations or tutorials
 - Creative writing, stories, or content creation
 - Academic help, homework, or research assistance
-- General knowledge questions unrelated to TarpAI platform
+- General knowledge questions unrelated to communication or TarpAI
 - Mathematical calculations or problem solving
-- Calendar management or scheduling (this feature has been removed)
-- Any request that doesn't relate to reminders, platform support, or user search
+- Calendar management, scheduling, or reminder services
+- Any request that doesn't relate to messaging, communication, or the TarpAI platform
 
 User Information:
 - Name: ${userName}
 - Email: ${userEmail}
 
 RESPONSE GUIDELINES:
-- Be friendly and helpful while staying focused on your allowed tasks
-- Keep responses under 200 words
-- If asked to do something outside your scope, politely decline and redirect to your core functions
-- For forbidden requests, respond: "I'm specialized in helping with reminders, TarpAI platform questions, and finding users. I can't assist with [their request]. Is there anything I can help you with regarding the platform or would you like me to set up a reminder?"
-
-IMPORTANT: When creating reminders, use the user's email address: ${userEmail}
-
-When creating reminders:
-1. Get reminder details (title, description, date/time)
-2. Format time as "YYYY-MM-DDTHH:mm:00Z" (UTC format)
-3. Call create_reminder function with the user's email
-4. Confirm the reminder has been set
+- Be friendly and helpful while focusing on communication and messaging support
+- Keep responses under 200 words and conversational
+- Emphasize your role as a messaging assistant that bridges communication across platforms
+- If asked to do something outside your scope, politely decline and redirect: "I'm a messaging assistant that helps you communicate with people across platforms. I can't assist with [their request]. Is there anything I can help you with regarding messaging, finding users, or using TarpAI's communication features?"
 
 When helping users find other users:
 1. Ask for the name or username they're looking for
 2. Use the search_users function to find matching users
 3. Present the results in a friendly, organized way
-4. Help them understand how to connect with found users
+4. Help them understand how to connect and start conversations with found users
 
 Current date: ${new Date().toLocaleDateString()}
 Current time: ${new Date().toLocaleTimeString()}`,
@@ -142,35 +132,6 @@ Current time: ${new Date().toLocaleTimeString()}`,
         {
           type: 'function',
           function: {
-            name: 'create_reminder',
-            description: 'Create a reminder or meeting notification that will be sent via email at the specified time. Use this when the user wants to schedule a reminder or set up a notification.',
-            parameters: {
-              type: 'object',
-              properties: {
-                title: {
-                  type: 'string',
-                  description: 'Short title for the reminder (e.g., "Team Meeting", "Doctor Appointment")',
-                },
-                description: {
-                  type: 'string',
-                  description: 'Detailed description of the reminder or meeting',
-                },
-                email: {
-                  type: 'string',
-                  description: 'Email address where the reminder should be sent',
-                },
-                scheduledFor: {
-                  type: 'string',
-                  description: 'ISO 8601 date-time string for when the reminder should be sent (e.g., "2026-03-01T14:00:00Z")',
-                },
-              },
-              required: ['title', 'email', 'scheduledFor'],
-            },
-          },
-        },
-        {
-          type: 'function',
-          function: {
             name: 'search_users',
             description: 'Search for users in the TarpAI platform by name, display name, or username. Use this when the user wants to find other users on the platform.',
             parameters: {
@@ -207,38 +168,6 @@ Current time: ${new Date().toLocaleTimeString()}`,
       if (responseMessage?.tool_calls && responseMessage.tool_calls.length > 0) {
         const toolCall = responseMessage.tool_calls[0] as any;
         
-        if (toolCall.function?.name === 'create_reminder') {
-          const args = JSON.parse(toolCall.function.arguments);
-          
-          // Create the reminder
-          await this.reminderService.createReminder(
-            userId,
-            args.title,
-            args.description || '',
-            args.email,
-            new Date(args.scheduledFor),
-          );
-
-          // Create a response about the reminder
-          const confirmationMessage = `✅ Perfect! I've scheduled your reminder "${args.title}" for ${new Date(args.scheduledFor).toLocaleString()}. You'll receive an email at ${args.email} when it's time.`;
-
-          // Add AI response to conversation
-          const assistantMessage: AIMessage = {
-            role: 'assistant',
-            content: confirmationMessage,
-            timestamp: new Date(),
-          };
-
-          conversation.messages.push(assistantMessage);
-          conversation.lastMessageAt = new Date();
-          await conversation.save();
-
-          return {
-            response: confirmationMessage,
-            conversationId: conversation._id.toString(),
-          };
-        }
-
         if (toolCall.function?.name === 'search_users') {
           const args = JSON.parse(toolCall.function.arguments);
           
