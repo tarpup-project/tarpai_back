@@ -32,7 +32,7 @@ async function testAutoReplyCooldown() {
 
     // Create or get conversation
     const conversation = await chatService.createConversation(user1._id.toString(), user2._id.toString());
-    const conversationId = conversation.id;
+    const conversationId = conversation.id.toString();
 
     console.log(`Using conversation: ${conversationId}`);
 
